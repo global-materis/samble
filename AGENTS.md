@@ -504,8 +504,13 @@ and documents the pattern.
 **Tests.** An application had no sanctioned way to boot itself on a test
 database, so it invented one. `openTestDatabase()` / `closeTestDatabase()`
 (`lib/modules/test-database.ts`) open PGlite and hand it to the SAME
-`createApp()` the deployment runs: the scaffold's `createApp({ db })` skips the
-`DB_*` variables when given a connection. `await client.waitReady` is
+`createApp()` the deployment runs: the scaffold's `createApp(db =
+databaseFromEnv())` takes the database as its argument, and `databaseFromEnv()`
+(`src/config/database.ts`) requires the `DB_*` variables where it reads them,
+so a test that hands in its own needs none. A DEFAULT and not a required
+argument because the CLI (`app-loader.ts`) calls `createApp()` bare; an
+optional `{ db }` bag was tried first and read as noise — nobody could tell
+what it was for, and it forced `options.db ? … : …` on the required list. `await client.waitReady` is
 load-bearing: a test that failed before its first query closed PGlite mid-load,
 after jest had torn the environment down. `samble init` writes
 `test/app.spec.ts`, `test/tsconfig.json` (so the type-aware lint reads tests
@@ -513,7 +518,7 @@ while the root keeps `rootDir: src`) and the jest config INSIDE `package.json` �
 a `jest.config.ts` at the root belongs to no tsconfig and the linter refuses it.
 Per engine since the dialects: PGlite, SQLite in memory, or a MySQL server.
 
-`test/cli.spec.ts` boots the generated `createApp({ db })` on
+`test/cli.spec.ts` boots the generated `createApp(db)` on
 `openTestDatabase()` with NO `.env`. That test is what caught the scaffold
 reading `CORS_ORIGIN` with `get()` (which throws) instead of `optional()`.
 

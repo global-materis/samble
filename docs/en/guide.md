@@ -1417,6 +1417,8 @@ Two things worth knowing:
 
 **Careful with reading the environment at module level**: that happens on *import*, which is before `createApp()` runs, so `require()` never gets to report it. A config file that needs a variable should export a **function** called from `createApp()` — which is what `samble init`'s scaffolded session does, for exactly this reason.
 
+The database's variables are the exception to "first in `createApp()`": the scaffold requires them in `databaseFromEnv()` (`src/config/database.ts`), the default of `createApp(db = databaseFromEnv())`, where they are read. That is what lets a test hand in its own database and need none of them. The cost is two lists instead of one when both the database's and the application's are missing.
+
 An installed **module** names what it needs in its manifest (`env: ['WA_BRIDGE_URL']`). It is checked at boot, **before the database is opened**, and the error gathers every module's missing variables into one list. It goes in the manifest rather than in the module's code so the question "what does this module need from me?" can be answered *without running anything* — which is what [`samble doctor`](./cli.md#samble-doctor) does. Declare only what is REQUIRED: a variable with a default in code is read with `optional()`.
 
 ```typescript
@@ -1438,15 +1440,18 @@ import { closeTestDatabase, openTestDatabase } from '@samble/core';
 import { createApp } from '../src';
 
 const db = await openTestDatabase();      // Postgres: PGlite, no server, no .env
-const app = await createApp({ db });      // the SAME createApp() as production
+const app = await createApp(db);          // the SAME createApp() as production
 await app.start(0);
 // ... supertest against app.getApp() ...
 await app.close();
 await closeTestDatabase(db);
 ```
 
-- `createApp({ db })` is the shape `samble init` writes: with a connection
-  handed in, it skips the `DB_*` variables and samble uses that connection.
+- `createApp(db = databaseFromEnv())` is the shape `samble init` writes. Left
+  out, the database is the one the environment describes, and
+  `databaseFromEnv()` (in `src/config/database.ts`) requires its `DB_*`
+  variables where it reads them. A test hands in its own and never gets there,
+  so it needs none of them.
   `_modules`, every migration, contracts, routes and the auth resolver all run
   for real. Only the connection differs, which is
   the point: a suite that mocks the database proves the mocks.

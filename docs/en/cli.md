@@ -151,7 +151,7 @@ src/index.ts          createApp() separated from main()
 src/config/permissions.ts
 src/config/auth.ts
 src/config/session.ts cookie sessions, and what they carry
-src/config/database.ts which engine, told to the compiler (types this.db)
+src/config/database.ts which engine (types this.db), and databaseFromEnv()
 test/app.spec.ts      the whole app booted on a test database of its engine
 test/tsconfig.json    so the editor and the linter see the tests
 ```

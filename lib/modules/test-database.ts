@@ -18,7 +18,7 @@ export interface TestDatabaseOptions {
 /**
  * A real, fresh, empty database of the application's engine, for a test.
  *
- * Hand it to `createApp({ db })` — the shape `samble init` writes — and the
+ * Hand it to `createApp(db)` — the shape `samble init` writes — and the
  * test runs the same boot a deployment does: `_modules`, every module's
  * migrations, contracts, routes and the auth resolver. Only the connection
  * differs. That is the point: a suite that replaces the database with mocks

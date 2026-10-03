@@ -1550,6 +1550,12 @@ plantilla antes de que alguien la edite, no una decisión.
 > una **función** y se la llame desde `createApp()`. El andamio de `samble init`
 > lo hace así con la sesión, justamente por esto.
 
+Las variables de la base son la excepción a "primero en `createApp()`": el
+andamio las exige en `databaseFromEnv()` (`src/config/database.ts`), el valor por
+defecto de `createApp(db = databaseFromEnv())`, que es donde se leen. Eso es lo
+que deja a una prueba pasar su propia base sin necesitar ninguna. El costo: si
+faltan las de la base y las de la aplicación, son dos listas en vez de una.
+
 ### `get()` lanza, y antes no
 
 Devolvía `undefined` tipada `string`, así que el valor seguía viaje y rompía en
@@ -1603,15 +1609,17 @@ import { closeTestDatabase, openTestDatabase } from '@samble/core';
 import { createApp } from '../src';
 
 const db = await openTestDatabase();      // Postgres: PGlite, sin servidor ni .env
-const app = await createApp({ db });      // el MISMO createApp() que producción
+const app = await createApp(db);          // el MISMO createApp() que producción
 await app.start(0);
 // ... supertest contra app.getApp() ...
 await app.close();
 await closeTestDatabase(db);
 ```
 
-- `createApp({ db })` es la forma que escribe `samble init`: con una conexión
-  pasada, no exige las variables `DB_*` y samble usa esa conexión. `_modules`,
+- `createApp(db = databaseFromEnv())` es la forma que escribe `samble init`.
+  Sin argumento, la base es la que describe el entorno, y `databaseFromEnv()`
+  (en `src/config/database.ts`) exige sus variables `DB_*` donde las lee. Una
+  prueba pasa la suya y nunca llega ahí, así que no necesita ninguna. `_modules`,
   cada migración, los contratos, las rutas y el resolutor de auth corren de
   verdad. Sólo cambia la conexión, y ese es el
   punto: una suite que simula la base prueba la simulación.

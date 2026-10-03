@@ -40,9 +40,9 @@ interface EngineScaffold {
   driver: Record<string, string>;
   /** Only what the TEST database needs on this engine. */
   testDeps: Record<string, string>;
-  /** The variables createApp() requires, besides SESSION_SECRET. */
+  /** The variables databaseFromEnv() requires. */
   required: string[];
-  /** The \`db\` option, as code. */
+  /** What databaseFromEnv() returns, as code. */
   options: string;
   /** The .env lines for the database. */
   env: (name: string) => string;
@@ -59,15 +59,15 @@ const ENGINES: Record<DialectName, EngineScaffold> = {
     testDeps: { '@electric-sql/pglite': '^0.5.8' },
     required: ['DB_HOST', 'DB_PORT', 'DB_USERNAME', 'DB_PASSWORD', 'DB_NAME'],
     options: `{
-      dialect: 'postgres',
-      host: ConfigService.get('DB_HOST'),
-      // \`number\` and not \`+get(...)\`: a value with a stray space or a
-      // comment on the line would reach the driver as NaN.
-      port: ConfigService.number('DB_PORT'),
-      user: ConfigService.get('DB_USERNAME'),
-      password: ConfigService.get('DB_PASSWORD'),
-      database: ConfigService.get('DB_NAME'),
-    }`,
+    dialect: 'postgres',
+    host: ConfigService.get('DB_HOST'),
+    // \`number\` and not \`+get(...)\`: a value with a stray space or a
+    // comment on the line would reach the driver as NaN.
+    port: ConfigService.number('DB_PORT'),
+    user: ConfigService.get('DB_USERNAME'),
+    password: ConfigService.get('DB_PASSWORD'),
+    database: ConfigService.get('DB_NAME'),
+  }`,
     env: (name) => `DB_HOST=localhost
 DB_PORT=5432
 DB_USERNAME=postgres
@@ -86,17 +86,17 @@ DB_NAME=${name}
     // No DB_PASSWORD: read with optional() below, see why there.
     required: ['DB_HOST', 'DB_PORT', 'DB_USERNAME', 'DB_NAME'],
     options: `{
-      dialect: 'mysql',
-      host: ConfigService.get('DB_HOST'),
-      // \`number\` and not \`+get(...)\`: a value with a stray space or a
-      // comment on the line would reach the driver as NaN.
-      port: ConfigService.number('DB_PORT'),
-      user: ConfigService.get('DB_USERNAME'),
-      // optional(): a local MySQL often has an EMPTY root password, and an
-      // empty value counts as missing for require().
-      password: ConfigService.optional('DB_PASSWORD') ?? '',
-      database: ConfigService.get('DB_NAME'),
-    }`,
+    dialect: 'mysql',
+    host: ConfigService.get('DB_HOST'),
+    // \`number\` and not \`+get(...)\`: a value with a stray space or a
+    // comment on the line would reach the driver as NaN.
+    port: ConfigService.number('DB_PORT'),
+    user: ConfigService.get('DB_USERNAME'),
+    // optional(): a local MySQL often has an EMPTY root password, and an
+    // empty value counts as missing for require().
+    password: ConfigService.optional('DB_PASSWORD') ?? '',
+    database: ConfigService.get('DB_NAME'),
+  }`,
     env: (name) => `DB_HOST=localhost
 DB_PORT=3306
 DB_USERNAME=root
@@ -119,11 +119,11 @@ SAMBLE_TEST_MYSQL_URL=mysql://root@localhost:3306
     testDeps: {},
     required: ['DB_URL'],
     options: `{
-      dialect: 'sqlite',
-      url: ConfigService.get('DB_URL'),
-      // Only for a libsql server; a local file needs none.
-      authToken: ConfigService.optional('DB_AUTH_TOKEN'),
-    }`,
+    dialect: 'sqlite',
+    url: ConfigService.get('DB_URL'),
+    // Only for a libsql server; a local file needs none.
+    authToken: ConfigService.optional('DB_AUTH_TOKEN'),
+  }`,
     env: (
       name,
     ) => `# A local file, or a libsql server URL (then also DB_AUTH_TOKEN).
@@ -150,16 +150,12 @@ export function createProject(options: InitOptions): Plan {
   // Wrapped the way prettier wraps it: the project runs `prettier --check`,
   // and prettier joins the call onto one line whenever it fits in 80.
   const requiredCall = (names: string[]) => {
-    const list = `[${names.map((name) => `'${name}'`).join(', ')}]`;
-    const spread = `...(options.db ? [] : ${list})`;
-    const oneLine = `  ConfigService.require(['SESSION_SECRET', ${spread}]);`;
+    const oneLine = `  ConfigService.require([${names
+      .map((name) => `'${name}'`)
+      .join(', ')}]);`;
     if (oneLine.length <= 80) return oneLine;
-    const item = `    ${spread},`;
-    const entry =
-      item.length <= 80
-        ? item
-        : `    ...(options.db\n      ? []\n      : ${list}),`;
-    return `  ConfigService.require([\n    'SESSION_SECRET',\n${entry}\n  ]);`;
+    const items = names.map((name) => `    '${name}',\n`).join('');
+    return `  ConfigService.require([\n${items}  ]);`;
   };
   const json = (deps: Record<string, string>) =>
     Object.entries(deps)
@@ -269,35 +265,40 @@ export function createProject(options: InitOptions): Plan {
 }
 `;
 
-  const index = `import { ConfigService, Samble, type Database } from '@samble/core';
+  const index = `import {
+  ConfigService,
+  Samble,
+  type Database,
+  type DatabaseOptions,
+} from '@samble/core';
 import auth from './config/auth';
-import './config/database';
+import databaseFromEnv from './config/database';
 import buildSession from './config/session';
-
-/** What a caller may hand in instead of reading it from the environment. */
-export interface AppOptions {
-  /**
-   * An open connection. A test passes \`await openTestDatabase()\` — a real
-   * Postgres inside the process — and gets the same boot a deployment does.
-   * Left out, samble opens one from the environment.
-   */
-  db?: Database;
-}
 
 /**
  * The application: a database, the modules it is made of, and how a request
  * becomes whoever is behind it.
  *
  * Exported so a test or a script can build it without starting a server.
+ *
+ * \`db\` is what it runs on. Left out, it is the database the environment
+ * describes (src/config/database.ts): what \`npm run dev\`, a deployment and
+ * every \`samble\` command connect to. A test hands in one of its own —
+ * \`createApp(await openTestDatabase())\` — and boots everything else exactly
+ * as a deployment does.
  */
-export async function createApp(options: AppOptions = {}) {
+export async function createApp(
+  db: Database | DatabaseOptions = databaseFromEnv(),
+) {
   // FIRST, before a single value is read: it names EVERY variable that is
   // missing, instead of one per run. \`samble doctor\` reports the same list
   // without starting anything, which is what an install script should call.
-${requiredCall(engine.required)}
+  // The database's own are required where they are read, in
+  // src/config/database.ts.
+  ConfigService.require(['SESSION_SECRET']);
 
   const app = await Samble.create({
-    db: options.db ?? ${engine.options},
+    db,
 
     // \`samble module <name>\` registers it here.
     modules: [],
@@ -809,7 +810,7 @@ describe('the application', () => {
     db = await openTestDatabase(${
       dialect === 'postgres' ? '' : `{ dialect: '${dialect}' }`
     });
-    app = await createApp({ db });
+    app = await createApp(db);
     await app.start(0);
   });
 
@@ -825,12 +826,14 @@ describe('the application', () => {
 });
 `;
 
-  const databaseTypes = `/**
+  const databaseTypes = `import { ConfigService, type DatabaseOptions } from '@samble/core';
+
+/**
  * Which database engine this application runs on, told to the compiler once.
  *
  * Drizzle's database type depends on the engine, so \`this.db\` is typed from
  * this — in every endpoint, routine and migration. Change the engine and change
- * it here, beside \`dialect\` in src/index.ts and in package.json.
+ * it here, in \`dialect\` below and in package.json.
  */
 declare global {
   namespace SambleDatabase {
@@ -840,7 +843,18 @@ declare global {
   }
 }
 
-export {};
+/**
+ * The database this application runs on, as the environment describes it.
+ *
+ * Its variables are required HERE, where they are read, and not in
+ * createApp(): a test hands createApp() a database of its own, never gets
+ * here, and so needs none of them.
+ */
+export default function databaseFromEnv(): DatabaseOptions {
+${requiredCall(engine.required)}
+
+  return ${engine.options};
+}
 `;
 
   return plan(

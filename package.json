@@ -1,7 +1,7 @@
 {
   "name": "@samble/core",
   "npmName": "@samble/core",
-  "version": "1.0.0-alpha.2",
+  "version": "1.0.0-alpha.3",
   "description": "Backend framework whose unit is the installable module: routes, tables, migrations, permissions and contracts declared per module.",
   "main": "./dist/lib/index.js",
   "types": "./types/lib/index.d.ts",

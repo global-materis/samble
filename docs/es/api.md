@@ -27,7 +27,7 @@ Con las primeras cuatro secciones ya podés construir algo.
 | `DocsConfig` | interface | `{ path?, info? }` — dónde contesta `/docs` y qué dice el documento OpenAPI de sí mismo. |
 | `ConfigService` | clase | El entorno, con el fallo en el lugar correcto. `.require(names)` va primero en `createApp()` y nombra TODAS las que faltan; `.get(name)` lanza si falta; `.number(name)` / `.boolean(name)` validan el formato; `.optional(name)` devuelve `string \| undefined`; `.whichMissing(names)` informa sin lanzar; `.all()`, `.mode()`. Una variable vacía cuenta como ausente. |
 | `ConfigError` | clase | Lo que lanzan los métodos de `ConfigService`. Lleva `names` con las variables involucradas, aparte del mensaje. |
-| `openTestDatabase` | `(options?: TestDatabaseOptions) => Promise<Database>` | Una base nueva del motor de la app, para `createApp({ db })` en una prueba: PGlite, memoria para SQLite, una base propia en `SAMBLE_TEST_MYSQL_URL` para MySQL. |
+| `openTestDatabase` | `(options?: TestDatabaseOptions) => Promise<Database>` | Una base nueva del motor de la app, para `createApp(db)` en una prueba: PGlite, memoria para SQLite, una base propia en `SAMBLE_TEST_MYSQL_URL` para MySQL. |
 | `TestDatabaseOptions` | interface | `{ dialect?, modules? }` — lo que recibe `openTestDatabase()`. |
 | `DialectName` | `'postgres' \| 'mysql' \| 'sqlite'` | Los motores sobre los que corre samble; `db: { dialect }` en `Samble.create()`. |
 | `closeTestDatabase` | `(db: Database) => Promise<void>` | Cierra lo que abrió `openTestDatabase()`. samble no cierra una conexión que no abrió. |

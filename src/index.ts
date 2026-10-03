@@ -1,8 +1,13 @@
 import path from 'path';
 import { existsSync } from 'fs';
 import type { Pool } from 'pg';
-import { ConfigService, Samble } from '../lib';
-import './config/database';
+import {
+  ConfigService,
+  Samble,
+  type Database,
+  type DatabaseOptions,
+} from '../lib';
+import databaseFromEnv from './config/database';
 import enableSession from './config/enable-session';
 import sessionAuth from './config/session-auth';
 import identity from './modules/identity/module';
@@ -22,30 +27,20 @@ import reports from './modules/reports/module';
  * It is BUILT here and not started, so anything that needs the application
  * without a server — `samble migrate`, a test, a one-off script — can ask for
  * it. That is the contract the CLI looks for.
+ *
+ * `db` is what it runs on: the database the environment describes unless the
+ * caller hands in one of its own, as a test does.
  */
-export async function createApp() {
+export async function createApp(
+  db: Database | DatabaseOptions = databaseFromEnv(),
+) {
   // FIRST, before a single value is read. A missing variable is named here, with
   // every other missing one, instead of arriving at the driver as `undefined`.
-  ConfigService.require([
-    'DB_HOST',
-    'DB_PORT',
-    'DB_USERNAME',
-    'DB_PASSWORD',
-    'DB_NAME',
-    'SECRET_KEY',
-  ]);
+  // The database's own are required where they are read, in config/database.ts.
+  ConfigService.require(['SECRET_KEY']);
 
   const app = await Samble.create({
-    db: {
-      // The engine is the operator's choice; this demo runs on Postgres. Say
-      // it here, in config/database.ts (for the compiler) and nowhere else.
-      dialect: 'postgres',
-      host: ConfigService.get('DB_HOST'),
-      port: ConfigService.number('DB_PORT'),
-      user: ConfigService.get('DB_USERNAME'),
-      password: ConfigService.get('DB_PASSWORD'),
-      database: ConfigService.get('DB_NAME'),
-    },
+    db,
     modules: [identity, catalog, reports],
     // THIS application's version, not samble's. `/health` reports it.
     version: '2.0.0',

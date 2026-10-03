@@ -152,7 +152,7 @@ src/index.ts          createApp() separado de main()
 src/config/permissions.ts
 src/config/auth.ts
 src/config/session.ts sesión por cookie, y qué lleva adentro
-src/config/database.ts qué motor, dicho al compilador (tipa this.db)
+src/config/database.ts qué motor (tipa this.db), y databaseFromEnv()
 test/app.spec.ts      la app entera, sobre una base de pruebas de su motor
 test/tsconfig.json    para que el editor y el linter vean las pruebas
 ```

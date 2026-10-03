@@ -29,7 +29,7 @@ The first four sections are enough to build something.
 | `ConfigService` | class | The environment, with the failure in the right place. `.require(names)` goes first in `createApp()` and names EVERY missing variable; `.get(name)` throws when it is absent; `.number(name)` / `.boolean(name)` validate the format; `.optional(name)` returns `string \| undefined`; `.whichMissing(names)` reports without throwing; `.all()`, `.mode()`. An empty value counts as missing. |
 | `ConfigError` | class | What `ConfigService` throws. Carries `names` with the variables involved, beside the message. |
 | `MODE` | `'production' \| 'development'` | What `ConfigService.mode()` returns. |
-| `openTestDatabase` | `(options?: TestDatabaseOptions) => Promise<Database>` | A fresh database of the app's engine, for `createApp({ db })` in a test: PGlite, memory for SQLite, a database of its own on `SAMBLE_TEST_MYSQL_URL` for MySQL. |
+| `openTestDatabase` | `(options?: TestDatabaseOptions) => Promise<Database>` | A fresh database of the app's engine, for `createApp(db)` in a test: PGlite, memory for SQLite, a database of its own on `SAMBLE_TEST_MYSQL_URL` for MySQL. |
 | `TestDatabaseOptions` | interface | `{ dialect?, modules? }` — what `openTestDatabase()` takes. |
 | `DialectName` | `'postgres' \| 'mysql' \| 'sqlite'` | The engines samble runs on; `db: { dialect }` in `Samble.create()`. |
 | `closeTestDatabase` | `(db: Database) => Promise<void>` | Closes what `openTestDatabase()` opened. samble does not close a connection it did not open. |

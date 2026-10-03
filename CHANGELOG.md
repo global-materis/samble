@@ -4,7 +4,17 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.0-alpha.2] - Unreleased
+## [1.0.0-alpha.3] - Unreleased
+
+### Changed
+
+- The scaffold's `createApp(db = databaseFromEnv())` takes the database as its
+  argument instead of an optional `{ db }`. `databaseFromEnv()`, in
+  `src/config/database.ts` beside the engine declaration, requires the `DB_*`
+  variables where it reads them; `createApp()` only requires its own. A test
+  calls `createApp(await openTestDatabase())`.
+
+## [1.0.0-alpha.2] - 2026-10-02
 
 ### Added
 

@@ -344,8 +344,12 @@ describe('samble init', () => {
       // Queda anotado donde lo leen los generadores (tablas, migraciones)…
       expect(pkg.samble).toEqual({ dialect });
       // …en el arranque…
-      expect(busca('src/index.ts')).toContain(`dialect: '${dialect}'`);
-      expect(busca('src/index.ts')).toContain("import './config/database';");
+      expect(busca('src/config/database.ts')).toContain(
+        `dialect: '${dialect}',`,
+      );
+      expect(busca('src/index.ts')).toContain(
+        "import databaseFromEnv from './config/database';",
+      );
       // …y en el compilador, que tipa `this.db` según el motor.
       expect(busca('src/config/database.ts')).toContain(
         `dialect: '${dialect}';`,
@@ -370,18 +374,18 @@ describe('samble init', () => {
     // Un MySQL local suele tener la clave de root VACÍA, y require() cuenta
     // un valor vacío como faltante.
     const requeridas = mysql
-      .busca('src/index.ts')
+      .busca('src/config/database.ts')
       .split('ConfigService.require([')[1]
       .split(']);')[0];
     expect(requeridas).not.toContain('DB_PASSWORD');
-    expect(mysql.busca('src/index.ts')).toContain(
+    expect(mysql.busca('src/config/database.ts')).toContain(
       "ConfigService.optional('DB_PASSWORD') ?? ''",
     );
 
     const sqlite = conMotor('sqlite');
     expect(sqlite.busca('.env')).toContain('DB_URL=file:mi_app.db');
-    expect(sqlite.busca('src/index.ts')).toContain(
-      "ConfigService.require(['SESSION_SECRET', ...(options.db ? [] : ['DB_URL'])]);",
+    expect(sqlite.busca('src/config/database.ts')).toContain(
+      "ConfigService.require(['DB_URL']);",
     );
     expect(sqlite.busca('.gitignore')).toContain('*.db');
   });
@@ -420,7 +424,20 @@ describe('samble init', () => {
     // conexión.
     const spec = busca('test/app.spec.ts');
     expect(spec).toContain('openTestDatabase()');
-    expect(spec).toContain('createApp({ db })');
+    expect(spec).toContain('createApp(db)');
+
+    // La base se elige a la vista: por defecto la del entorno, y sus variables
+    // se exigen donde se leen. createApp() solo exige lo suyo, así que una
+    // prueba que trae su base no necesita ninguna DB_*.
+    const entry = busca('src/index.ts');
+    expect(entry).toContain(
+      'db: Database | DatabaseOptions = databaseFromEnv()',
+    );
+    expect(entry).toContain("ConfigService.require(['SESSION_SECRET']);");
+    expect(entry).not.toContain('options.db');
+    expect(busca('src/config/database.ts')).toContain(
+      'export default function databaseFromEnv(): DatabaseOptions',
+    );
     expect(spec).toContain('closeTestDatabase(db)');
   });
 
@@ -465,10 +482,10 @@ describe('samble init', () => {
     const pkg2 = JSON.parse(busca('package.json'));
     expect(pkg2.dependencies).not.toHaveProperty('connect-pg-simple');
 
-    // SESSION_SECRET entra en la lista que se chequea primero: el andamio lo
-    // escribe en el .env, asi que una instalacion sin el tiene que enterarse
-    // junto con todo lo demas que falte.
-    expect(index).toContain("'SESSION_SECRET',");
+    // SESSION_SECRET entra en la lista que createApp() chequea primero: el
+    // andamio lo escribe en el .env, asi que una instalacion sin el tiene que
+    // enterarse antes de leer nada.
+    expect(index).toContain("ConfigService.require(['SESSION_SECRET']);");
 
     // El secreto se genera por proyecto: uno por defecto que nadie cambia es
     // lo mismo que no firmar la cookie.
@@ -1135,14 +1152,14 @@ describe('un módulo generado y puesto a andar', () => {
     expect(entry).toContain('modules: [inventory]');
   });
 
-  it('createApp({ db }) arranca la app generada sobre openTestDatabase()', async () => {
+  it('createApp(db) arranca la app generada sobre openTestDatabase()', async () => {
     // Lo que corre `npm test` en un proyecto recién creado: el mismo
     // createApp() del despliegue, con la conexión de prueba y sin DB_* en el
     // entorno.
     process.env.SESSION_SECRET ??= 'test';
     const { createApp } = require(path.join(workspace, 'src/index.ts'));
     const testDb = await openTestDatabase();
-    const generada: Samble = await createApp({ db: testDb });
+    const generada: Samble = await createApp(testDb);
     try {
       await generada.start(0);
       expect((await request(generada.getApp()).get('/health')).status).toBe(
