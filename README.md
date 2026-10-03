@@ -14,8 +14,6 @@ and installs into another application as one piece.
 
 Express + Drizzle + class-validator underneath, decorators on top.
 
-> **1.0.0-alpha.1** — alpha: the API will still move.
-
 ## Start
 
 ```bash
