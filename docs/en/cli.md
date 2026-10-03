@@ -20,9 +20,8 @@ npm run dev
 ```
 
 After `init`, samble is installed in the project, so `npx samble` resolves the
-local binary. The `@alpha` tag is only for the very first call: without it
-`npx samble` fetches the `latest` tag, which is a different major with a
-different CLI.
+local binary. The `@alpha` tag is only for the very first call, while samble is
+published under it.
 
 ---
 
@@ -151,6 +150,8 @@ src/index.ts          createApp() separated from main()
 src/config/permissions.ts
 src/config/auth.ts
 src/config/session.ts cookie sessions, and what they carry
+test/app.spec.ts      the whole app booted on a Postgres inside the process
+test/tsconfig.json    so the editor and the linter see the tests
 ```
 
 Three things in there are worth knowing about, because getting any of them
@@ -185,13 +186,24 @@ this the generated resolver could not read `request.session?.userId` and a login
 could not write `this.request.session`: the type does not exist until the
 package **and** its types are installed.
 
-> The default store lives in memory: it is lost on every restart, and a second
-> process does not see the first one's sessions. When this has users, put the
-> sessions in the database you already run and pass it as `store`.
+> Without a store they live in memory: lost on every restart, and a second
+> process does not see the first one's. When this has users, pass the
+> `express-session` store for your engine, built over the connection samble
+> opened (`app.db.$client`) so there is no second pool. samble installs none:
+> which one depends on the engine, and the engine is your choice. See
+> [Sessions](./guide.md#sessions).
+
+**And it comes with a test that boots the application.** `test/app.spec.ts` calls
+the same `createApp()` a deployment runs, handing it `openTestDatabase()` — a
+real Postgres inside the process (PGlite) — so `npm test` needs no server and no
+`.env`. The jest configuration lives in `package.json`, and `test/tsconfig.json`
+lets the editor and the type-aware lint rules read the tests while the root
+`tsconfig.json` keeps `rootDir: src` for the build. See
+[Testing](./guide.md#testing).
 
 **And it is born under version control.** It runs `git init` on branch `main` and
 leaves the scaffold as the first commit, after `npm install` so the lockfile is in
-it. The commit is the point: sixteen files nobody typed are not your work, and
+it. The commit is the point: eighteen files nobody typed are not your work, and
 with no commit of their own they end up inside the first real one, where nobody
 reviewing it can tell the two apart. With it, your first `git diff` is only what
 you wrote, and `git checkout .` has somewhere to go back to from minute one.
@@ -542,8 +554,10 @@ npx samble migration:generate billing/add-due-date --print
 | `--check` | also report what the live database is missing |
 | `--force` | overwrite a file that already exists |
 
-**It needs no database.** It compares the module's tables against that module's
-**snapshot**, which is a file:
+**It does not connect to the database**, but it does build the application through
+`createApp()` to learn its modules — so the variables `createApp()` requires
+have to be in the environment (`.env` is enough). It compares the module's
+tables against that module's **snapshot**, which is a file:
 
 ```
 src/modules/billing/

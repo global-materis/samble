@@ -20,8 +20,8 @@ npm run dev
 ```
 
 Después de `init`, samble queda instalado en el proyecto, así que `npx samble`
-resuelve el binario local. La etiqueta `@alpha` es sólo para la primera llamada:
-sin ella `npx samble` trae la etiqueta `latest`, que es otro major con otro CLI.
+resuelve el binario local. La etiqueta `@alpha` es sólo para la primera llamada,
+mientras samble se publique bajo ella.
 
 ---
 
@@ -151,6 +151,8 @@ src/index.ts          createApp() separado de main()
 src/config/permissions.ts
 src/config/auth.ts
 src/config/session.ts sesión por cookie, y qué lleva adentro
+test/app.spec.ts      la app entera, arrancada sobre un Postgres en proceso
+test/tsconfig.json    para que el editor y el linter vean las pruebas
 ```
 
 Tres cosas de ahí conviene conocerlas, porque equivocarse en cualquiera cuesta
@@ -185,13 +187,24 @@ proyecto. Sin esto, el resolutor que se genera no podría leer
 `request.session?.userId` ni un login escribir `this.request.session`: el tipo
 no existe hasta que el paquete **y** sus tipos están instalados.
 
-> El store por defecto vive en memoria: se pierde en cada reinicio y un segundo
-> proceso no ve las sesiones del primero. Cuando esto tenga usuarios, poné las
-> sesiones en la base que ya corrés y pasala como `store`.
+> Sin store viven en memoria: se pierden en cada reinicio y un segundo proceso
+> no ve las del primero. Cuando esto tenga usuarios, pasá el store de
+> `express-session` de tu motor, armado sobre la conexión que abrió samble
+> (`app.db.$client`) para no abrir otro pool. samble no instala ninguno: cuál
+> depende del motor, y el motor lo elegís vos. Mirá
+> [Sesiones](./guide.md#sesiones).
+
+**Y trae una prueba que arranca la aplicación.** `test/app.spec.ts` llama al
+mismo `createApp()` que corre un despliegue, pasándole `openTestDatabase()` — un
+Postgres de verdad dentro del proceso (PGlite) — así que `npm test` no necesita
+servidor ni `.env`. La configuración de jest va en el `package.json`, y
+`test/tsconfig.json` deja que el editor y las reglas de lint con tipos lean las
+pruebas mientras el `tsconfig.json` raíz conserva `rootDir: src` para el build.
+Mirá [Pruebas](./guide.md#pruebas).
 
 **Y nace versionado.** Corre `git init` en la rama `main` y deja el andamiaje
 como primer commit, después del `npm install` para que el lockfile entre. El
-punto es el commit: dieciséis archivos que nadie tipeó no son trabajo tuyo, y sin
+punto es el commit: dieciocho archivos que nadie tipeó no son trabajo tuyo, y sin
 un commit propio terminan adentro del primero de verdad, donde quien lo revise no
 puede distinguir una cosa de la otra. Con él, tu primer `git diff` es sólo lo que
 escribiste vos, y `git checkout .` tiene a dónde volver desde el minuto uno.
@@ -551,8 +564,10 @@ npx samble migration:generate billing/add-due-date --print
 | `--check` | además dice qué le falta a la base viva |
 | `--force` | sobrescribe un archivo que ya existe |
 
-**No necesita base de datos.** Compara las tablas del módulo contra el
-**snapshot** de ese módulo, que es un archivo:
+**No se conecta a la base**, pero sí construye la aplicación con `createApp()`
+para saber qué módulos tiene — así que las variables que `createApp()` exige
+tienen que estar en el entorno (alcanza con el `.env`). Compara las tablas del
+módulo contra el **snapshot** de ese módulo, que es un archivo:
 
 ```
 src/modules/billing/

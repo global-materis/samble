@@ -38,7 +38,8 @@ export function createProject(options: InitOptions): Plan {
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
   },
   "dependencies": {
     "class-validator": "^0.14.0",
@@ -50,19 +51,32 @@ export function createProject(options: InitOptions): Plan {
     "reflect-metadata": "^0.1.13"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "@eslint/js": "^10.0.1",
+    "@jest/globals": "^30.5.2",
     "@types/express": "^4.17.21",
     "drizzle-kit": "^0.31.11",
     "@types/express-session": "^1.18.0",
     "@types/node": "^24.0.0",
+    "@types/supertest": "^7.2.1",
     "eslint": "^10.11.0",
     "eslint-config-prettier": "^10.1.8",
+    "jest": "^30.5.2",
     "nodemon": "^3.1.0",
     "prettier": "^3.9.9",
+    "supertest": "^7.3.1",
+    "ts-jest": "^29.4.14",
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.70.1"
+  },
+  "jest": {
+    "preset": "ts-jest",
+    "testEnvironment": "node",
+    "roots": ["<rootDir>/test"],
+    "moduleNameMapper": { "^@/(.*)$": "<rootDir>/${modulesDir}/$1" },
+    "testTimeout": 30000
   },
   "engines": {
     "node": ">=22.13"
@@ -111,9 +125,19 @@ export function createProject(options: InitOptions): Plan {
 }
 `;
 
-  const index = `import { ConfigService, Samble } from '@samble/core';
+  const index = `import { ConfigService, Samble, type Database } from '@samble/core';
 import auth from './config/auth';
 import buildSession from './config/session';
+
+/** What a caller may hand in instead of reading it from the environment. */
+export interface AppOptions {
+  /**
+   * An open connection. A test passes \`await openTestDatabase()\` — a real
+   * Postgres inside the process — and gets the same boot a deployment does.
+   * Left out, samble opens one from the DB_* variables.
+   */
+  db?: Database;
+}
 
 /**
  * The application: a database, the modules it is made of, and how a request
@@ -121,21 +145,19 @@ import buildSession from './config/session';
  *
  * Exported so a test or a script can build it without starting a server.
  */
-export async function createApp() {
+export async function createApp(options: AppOptions = {}) {
   // FIRST, before a single value is read: it names EVERY variable that is
   // missing, instead of one per run. \`samble doctor\` reports the same list
   // without starting anything, which is what an install script should call.
   ConfigService.require([
-    'DB_HOST',
-    'DB_PORT',
-    'DB_USERNAME',
-    'DB_PASSWORD',
-    'DB_NAME',
     'SESSION_SECRET',
+    ...(options.db
+      ? []
+      : ['DB_HOST', 'DB_PORT', 'DB_USERNAME', 'DB_PASSWORD', 'DB_NAME']),
   ]);
 
   const app = await Samble.create({
-    db: {
+    db: options.db ?? {
       host: ConfigService.get('DB_HOST'),
       // \`number\` and not \`+get(...)\`: a value with a stray space or a
       // comment on the line would reach the driver as NaN.
@@ -200,7 +222,7 @@ export async function createApp() {
     // cookies, which a session needs — and which forces an explicit list: a
     // browser refuses \`*\` on a request that carries them.
     cors: {
-      origin: (ConfigService.get('CORS_ORIGIN') ?? '')
+      origin: (ConfigService.optional('CORS_ORIGIN') ?? '')
         .split(',')
         .map((value) => value.trim())
         .filter(Boolean),
@@ -217,6 +239,7 @@ export async function createApp() {
   // Cookie sessions, before the routes: what a login writes into
   // \`this.request.session\` is what src/config/auth.ts reads back on the next
   // request. Middleware added here runs ahead of every module's routes.
+  // In memory until you pass a store — see ./config/session.ts.
   app.use(buildSession());
 
   return app;
@@ -475,7 +498,7 @@ declare global {
 }
 `;
 
-  const sessionFile = `import session from 'express-session';
+  const sessionFile = `import session, { type Store } from 'express-session';
 import { ConfigService } from '@samble/core';
 
 /**
@@ -500,19 +523,26 @@ declare module 'express-session' {
  * every visitor who never signs in, and \`resave: false\` keeps a request that
  * changed nothing from writing to the store.
  *
- * WORTH KNOWING: the default store lives in memory. It is fine while you
- * develop, and wrong in production for two reasons that both bite — it is lost
- * on every restart, and a second process does not see the first one's
- * sessions. When this has users, put the sessions in the database you already
- * run (\`connect-pg-simple\` over the same Postgres) and pass it as \`store\`.
+ * WORTH KNOWING: without a \`store\` they live in memory. Fine while you
+ * develop, and wrong in production for two reasons that both bite — they are
+ * lost on every restart, and a second process does not see the first one's.
+ * When this has users, keep them in the database you already run: pick the
+ * \`express-session\` store for YOUR engine and build it over the connection
+ * samble opened, \`app.db.$client\`, so there is no second pool:
+ *
+ *   app.use(buildSession(new PgStore({ pool: app.db.$client as Pool })));
+ *
+ * samble installs no store on purpose: which one depends on the engine, and
+ * that is your choice.
  *
  * It is a FUNCTION, and that part matters: reading the environment at module
  * level would happen on import, which is before createApp() runs and therefore
  * before ConfigService.require() can say what is missing. Called from inside
  * createApp(), a missing SESSION_SECRET is reported with everything else.
  */
-export default function buildSession() {
+export default function buildSession(store?: Store) {
   return session({
+    store,
     secret: ConfigService.get('SESSION_SECRET'),
     resave: false,
     saveUninitialized: false,
@@ -587,7 +617,10 @@ let warned = false;
  * const auth = defineAuth(async (request, { db }) => {
  *   const userId = request.session?.userId;
  *   if (!userId) return null;
- *   const user = await db.getRepository(User).findOneBy({ id: userId });
+ *   const [user] = await db
+ *     .select({ role: users.role })
+ *     .from(users)
+ *     .where(eq(users.id, userId));
  *   if (!user) return null;
  *   return { actor: { userId }, permissions: PERMISSIONS_BY_ROLE[user.role] };
  * });
@@ -615,6 +648,54 @@ const auth = defineAuth(async (request) => {
 export default auth;
 `;
 
+  // Its own tsconfig so the editor and the type-aware lint rules see the
+  // tests, while the root one keeps \`rootDir: src\` for the build.
+  const testTsconfig = `{
+  "extends": "../tsconfig.json",
+  "compilerOptions": { "rootDir": "..", "noEmit": true },
+  "include": [".", "../src"]
+}
+`;
+
+  const appSpec = `import 'reflect-metadata';
+import { afterAll, beforeAll, describe, expect, it } from '@jest/globals';
+import request from 'supertest';
+import {
+  closeTestDatabase,
+  openTestDatabase,
+  type Database,
+  type Samble,
+} from '@samble/core';
+import { createApp } from '../src';
+
+/**
+ * The application itself, booted on a real Postgres inside the process: the
+ * same migrations, routes, auth and sessions a deployment runs. Only the
+ * connection differs, and no server or .env is needed.
+ */
+describe('the application', () => {
+  let db: Database;
+  let app: Samble;
+
+  beforeAll(async () => {
+    process.env.SESSION_SECRET ??= 'test';
+    db = await openTestDatabase();
+    app = await createApp({ db });
+    await app.start(0);
+  });
+
+  afterAll(async () => {
+    await app?.close();
+    await closeTestDatabase(db);
+  });
+
+  it('answers the health probe', async () => {
+    const res = await request(app.getApp()).get('/health');
+    expect(res.status).toBe(200);
+  });
+});
+`;
+
   return plan(
     [
       { path: 'package.json', content: pkg },
@@ -633,19 +714,21 @@ export default auth;
       { path: 'src/config/permissions.ts', content: permissionTypes },
       { path: 'src/config/auth.ts', content: authFile },
       { path: 'src/config/session.ts', content: sessionFile },
+      { path: 'test/tsconfig.json', content: testTsconfig },
+      { path: 'test/app.spec.ts', content: appSpec },
     ],
     [],
     [
       `Fill in .env (the database has to exist; samble creates tables, not databases).`,
       `Once it runs: /health answers the probes, /docs has the API, and logs/ has the route map.`,
       `src/config/auth.ts lets EVERYONE through, so endpoints answer from the first request. Replace it before this has users.`,
-      // `npx samble` without a version resolves the `latest` tag, which is a
-      // different major with a different CLI. Inside the project it is the
-      // local install that answers, so no version is needed here.
+      // Inside the project it is the local install that answers, so no
+      // version or tag is needed here.
       `Create your first module: npx samble module <name>${
         modulesDir === 'src/modules' ? '' : ` --dir ${modulesDir}`
       }`,
       `Formatting is decided: .editorconfig for every editor, .prettierrc for Prettier, eslint.config.mjs for what the code means, .gitattributes so the tree is LF everywhere. npm run lint / npm run format.`,
+      `npm test boots the whole app on a Postgres inside the process (openTestDatabase): no server, no .env.`,
       `Then: npm run dev`,
     ],
   );

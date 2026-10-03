@@ -1,5 +1,6 @@
 import path from 'path';
 import { existsSync } from 'fs';
+import type { Pool } from 'pg';
 import { ConfigService, Samble } from '../lib';
 import enableSession from './config/enable-session';
 import sessionAuth from './config/session-auth';
@@ -99,7 +100,7 @@ export async function createApp() {
     auth: sessionAuth,
   });
 
-  app.use(enableSession(app.getApp()));
+  app.use(enableSession(app.getApp(), app.db.$client as Pool));
   app.static('/public', './src/public');
 
   // Views live inside the module that owns them.

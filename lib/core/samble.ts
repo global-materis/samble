@@ -357,6 +357,25 @@ export default class Samble extends Server {
     this.permissionRegistry.list();
 
   /**
+   * The connection samble opened (or was handed), for what the application
+   * plugs in beside it — a session store over the same pool, say:
+   *
+   * ```typescript
+   * new PgStore({ pool: app.db.$client as Pool })
+   * ```
+   *
+   * The engine is the application's choice, so the store package is too:
+   * samble hands over the connection and installs nothing for it. `$client`
+   * is the driver's own object (a `pg` Pool, a PGlite instance, ...).
+   *
+   * Read-only. Endpoints, routines and providers already get it as `this.db`;
+   * this is for code that runs outside them, in `createApp()`.
+   */
+  public get db(): Database {
+    return this.dbSource;
+  }
+
+  /**
    * The handle of a schedule: `start()`, `stop()`, `runNow()`.
    *
    * Here as well as on every unit so the decision can be made OUTSIDE a

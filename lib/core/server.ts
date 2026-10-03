@@ -96,7 +96,9 @@ export default class Server {
     this.app.use(express.urlencoded({ extended: true }));
     this.app.use(cookieParser());
     this.app.use(
-      morgan('samble', { skip: (request) => this.quietPaths.has(request.path) }),
+      morgan('samble', {
+        skip: (request) => this.quietPaths.has(request.path),
+      }),
     );
   }
 

@@ -44,8 +44,8 @@ is **not** an application. Dual layout:
   Spanish page across in the same commit. Code, identifiers and the framework's
   own JSDoc stay English on both sides; only the prose is translated.
 
-- **`docs/*/api.md` lists what an APPLICATION writes** — 97 of the 138 exports.
-  The other 41 are the module registry, the migrator, the loaders and the
+- **`docs/*/api.md` lists what an APPLICATION writes** — 99 of the 152 exports.
+  The other 53 are the module registry, the migrator, the loaders and the
   decorators' metadata: public because the CLI is a separate process, and left
   out on purpose so the page is a working reference and not a dump. It is also
   the one doc that can go stale silently, since adding a name to `lib/index.ts`
@@ -426,6 +426,38 @@ Keep that split — the decision is the part worth testing.
 - Not published yet. To test in a consumer: `npm run build && npm pack`, then
   install the `.tgz`. A tarball is closer to what npm installs than `npm link`,
   which resolves through symlinks and hides a bad `files` entry.
+
+## Sessions are the application's; tests are samble's
+
+**Sessions.** Putting them in a database used to mean a store package that
+wanted its own pool, so the application opened a connection beside samble's,
+built the drizzle instance itself and took the schema out of samble's hands —
+and a module ended up owning a `sessions` table that is infrastructure, not
+domain. A samble-owned store was built and then REMOVED (2026-10-02, author's
+call): where sessions live depends on the engine, and the engine is the
+operator's choice — samble must neither impose one nor make anybody install a
+package for an engine they do not run. What samble gives instead is
+`app.db` (a getter over `dbSource`): the store the application picks is built
+over `app.db.$client`, the same pool. The demo does exactly that with
+`connect-pg-simple`. The scaffold's `buildSession(store?)` stays engine-neutral
+and documents the pattern.
+
+**Tests.** An application had no sanctioned way to boot itself on a test
+database, so it invented one. `openTestDatabase()` / `closeTestDatabase()`
+(`lib/modules/test-database.ts`) open PGlite and hand it to the SAME
+`createApp()` the deployment runs: the scaffold's `createApp({ db })` skips the
+`DB_*` variables when given a connection. `await client.waitReady` is
+load-bearing: a test that failed before its first query closed PGlite mid-load,
+after jest had torn the environment down. `samble init` writes
+`test/app.spec.ts`, `test/tsconfig.json` (so the type-aware lint reads tests
+while the root keeps `rootDir: src`) and the jest config INSIDE `package.json` —
+a `jest.config.ts` at the root belongs to no tsconfig and the linter refuses it.
+PGlite is Postgres, like the rest of samble today; it follows whatever the
+dialect design decides.
+
+`test/cli.spec.ts` boots the generated `createApp({ db })` on
+`openTestDatabase()` with NO `.env`. That test is what caught the scaffold
+reading `CORS_ORIGIN` with `get()` (which throws) instead of `optional()`.
 
 ## The two ways modules meet
 

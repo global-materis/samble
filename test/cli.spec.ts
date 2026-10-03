@@ -24,8 +24,10 @@ import { parseTarget, toKebab, toPascal } from '../lib/cli/names';
 import {
   AuthResolver,
   buildContainer,
+  closeTestDatabase,
   collectModuleTables,
   Database,
+  openTestDatabase,
   Samble,
   ResolvedModule,
 } from '../lib';
@@ -217,7 +219,9 @@ describe('lo generado entra en el ancho de prettier', () => {
       from: '@samble/core',
     }).files[0].content;
 
-    expect(corto).toContain("import { Provides, Provider } from '@samble/core';");
+    expect(corto).toContain(
+      "import { Provides, Provider } from '@samble/core';",
+    );
     expect(corto).toContain("import { Flag } from '../tokens/flag.token';");
 
     // El import de una ranura trae DOS nombres y una ruta con el alias: es el
@@ -300,7 +304,47 @@ describe('samble init', () => {
       'src/config/permissions.ts',
       'src/config/auth.ts',
       'src/config/session.ts',
+      'test/tsconfig.json',
+      'test/app.spec.ts',
     ]);
+  });
+
+  it('nace con pruebas que arrancan la app entera, sin servidor ni .env', () => {
+    const archivos = createProject({ name: 'mi-app', sambleVersion }).files;
+    const busca = (ruta: string) =>
+      archivos.find((file) => file.path === ruta)!.content;
+
+    const pkg = JSON.parse(busca('package.json'));
+    // PGlite carga su WASM con un import dinámico: sin el flag, jest no puede.
+    expect(pkg.scripts.test).toContain('--experimental-vm-modules');
+    // La config va en el package.json y no en un jest.config.ts: un .ts suelto
+    // en la raíz no pertenece a ningún tsconfig y el lint con tipos lo rechaza.
+    expect(pkg.jest).toMatchObject({
+      preset: 'ts-jest',
+      roots: ['<rootDir>/test'],
+      moduleNameMapper: { '^@/(.*)$': '<rootDir>/src/modules/$1' },
+    });
+    [
+      'jest',
+      'ts-jest',
+      '@jest/globals',
+      'supertest',
+      '@types/supertest',
+      '@electric-sql/pglite',
+    ].forEach((dep) => expect(pkg.devDependencies).toHaveProperty(dep));
+
+    // El tsconfig raíz deja `rootDir: src` para el build; las pruebas tienen
+    // el suyo, que es el que encuentran el editor y ESLint.
+    const testTsconfig = busca('test/tsconfig.json');
+    expect(testTsconfig).toContain('"extends": "../tsconfig.json"');
+    expect(testTsconfig).toContain('"include": [".", "../src"]');
+
+    // La prueba usa el MISMO createApp() que el despliegue: solo cambia la
+    // conexión.
+    const spec = busca('test/app.spec.ts');
+    expect(spec).toContain('openTestDatabase()');
+    expect(spec).toContain('createApp({ db })');
+    expect(spec).toContain('closeTestDatabase(db)');
   });
 
   it('la sesión viene puesta: sin eso, `request.session` no compila', () => {
@@ -329,12 +373,20 @@ describe('samble init', () => {
     // Es una FUNCION, no una sesion ya construida: leer el entorno en el tope
     // del modulo pasa al importar, que es ANTES de createApp() y por lo tanto
     // antes de que require() pueda decir que falta algo.
-    expect(session).toContain('export default function buildSession()');
+    // El store es opcional: cuál usar depende del motor, y el motor lo elige
+    // la app. samble no instala ninguno; el comentario dice cómo armarlo sobre
+    // su conexión (`app.db.$client`) sin abrir otra.
+    expect(session).toContain(
+      'export default function buildSession(store?: Store)',
+    );
+    expect(session).toContain('app.db.$client');
 
     // Y montada ANTES de las rutas, o lo que el login escriba no se lee.
     const index = busca('src/index.ts');
     expect(index).toContain("import buildSession from './config/session'");
     expect(index).toContain('app.use(buildSession());');
+    const pkg2 = JSON.parse(busca('package.json'));
+    expect(pkg2.dependencies).not.toHaveProperty('connect-pg-simple');
 
     // SESSION_SECRET entra en la lista que se chequea primero: el andamio lo
     // escribe en el .env, asi que una instalacion sin el tiene que enterarse
@@ -419,9 +471,10 @@ describe('samble init', () => {
     // La regla queda CONFIGURADA para el caso (`no-empty-object-type` con
     // `with-single-extends`), que es mejor que apagarla: un `{}` de verdad
     // sigue reportándose.
-    const permisos = createProject({ name: 'mi-app', sambleVersion }).files.find(
-      (file) => file.path === 'src/config/permissions.ts',
-    )!.content;
+    const permisos = createProject({
+      name: 'mi-app',
+      sambleVersion,
+    }).files.find((file) => file.path === 'src/config/permissions.ts')!.content;
 
     expect(permisos).not.toContain('eslint-disable');
   });
@@ -683,7 +736,9 @@ describe('un módulo generado y puesto a andar', () => {
 
     // El camino real: primero el proyecto, después los módulos.
     scaffold(createProject({ name: 'inventory-app', sambleVersion }));
-    scaffold(createModule({ name: 'Inventory', modulesDir, from: '@samble/core' }));
+    scaffold(
+      createModule({ name: 'Inventory', modulesDir, from: '@samble/core' }),
+    );
     scaffold(
       createEndpoint({
         target: 'inventory/count-items',
@@ -698,7 +753,11 @@ describe('un módulo generado y puesto a andar', () => {
       }),
     );
     scaffold(
-      createTable({ target: 'inventory/item', modulesDir, from: '@samble/core' }),
+      createTable({
+        target: 'inventory/item',
+        modulesDir,
+        from: '@samble/core',
+      }),
     );
     scaffold(
       createEndpoint({
@@ -711,7 +770,11 @@ describe('un módulo generado y puesto a andar', () => {
       }),
     );
     scaffold(
-      createRoutine({ target: 'inventory/nightly', modulesDir, from: '@samble/core' }),
+      createRoutine({
+        target: 'inventory/nightly',
+        modulesDir,
+        from: '@samble/core',
+      }),
     );
     scaffold(
       createMigration({
@@ -734,7 +797,11 @@ describe('un módulo generado y puesto a andar', () => {
       }),
     );
     scaffold(
-      createProvider({ target: 'inventory/stock', modulesDir, from: '@samble/core' }),
+      createProvider({
+        target: 'inventory/stock',
+        modulesDir,
+        from: '@samble/core',
+      }),
     );
     scaffold(
       createToken({
@@ -991,6 +1058,31 @@ describe('un módulo generado y puesto a andar', () => {
     expect(entry).toContain('modules: [inventory]');
   });
 
+  it('createApp({ db }) arranca la app generada sobre openTestDatabase()', async () => {
+    // Lo que corre `npm test` en un proyecto recién creado: el mismo
+    // createApp() del despliegue, con la conexión de prueba y sin DB_* en el
+    // entorno.
+    process.env.SESSION_SECRET ??= 'test';
+    const { createApp } = require(path.join(workspace, 'src/index.ts'));
+    const testDb = await openTestDatabase();
+    const generada: Samble = await createApp({ db: testDb });
+    try {
+      await generada.start(0);
+      expect((await request(generada.getApp()).get('/health')).status).toBe(
+        200,
+      );
+      expect(
+        (await request(generada.getApp()).get('/api/inventory/ping')).status,
+      ).toBe(200);
+      expect(
+        await query(testDb, `select to_regclass('inv_items')::text as found`),
+      ).toEqual([{ found: 'inv_items' }]);
+    } finally {
+      await generada.close();
+      await closeTestDatabase(testDb);
+    }
+  });
+
   it('el punto de entrada compila y expone createApp() sin arrancar nada', () => {
     // Requerirlo lo TYPECHEQUEA (ts-jest) y, como `require.main` no es él, no
     // levanta ningún servidor: por eso la plantilla separa createApp() de main().
@@ -1082,7 +1174,9 @@ describe('un módulo generado y puesto a andar', () => {
     expect(reaccion).toContain("'inventory.item-added',");
     expect(reaccion).toContain("'slot',");
     // Y el import trae `Reaction`, o el archivo generado no compila.
-    expect(reaccion).toContain("import { Reaction, token } from '@samble/core';");
+    expect(reaccion).toContain(
+      "import { Reaction, token } from '@samble/core';",
+    );
 
     const ranura = read(`${modulesDir}/inventory/tokens/labels.token.ts`);
     // El token nombra la colección, la interfaz nombra UNA contribución.

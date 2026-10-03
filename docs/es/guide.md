@@ -1000,6 +1000,30 @@ Notas:
   una app que nunca cableó la autenticación tiene un bug, no un visitante no
   autorizado.
 
+### Sesiones
+
+samble no guarda sesiones: dónde viven depende del motor de base de datos, y el
+motor lo elige la aplicación. Lo que te da es su conexión, para que el store que
+elijas la comparta en vez de abrir un segundo pool:
+
+```typescript
+import connectPgSimple from 'connect-pg-simple';
+import session from 'express-session';
+import type { Pool } from 'pg';
+
+const app = await createApp();
+const PgStore = connectPgSimple(session);
+app.use(buildSession(new PgStore({ pool: app.db.$client as Pool })));
+```
+
+- `app.db` es la conexión que samble abrió o recibió — la misma que los
+  endpoints tienen como `this.db`. `$client` es el objeto del driver (acá, un
+  Pool de `pg`).
+- La tabla del store es del paquete del store, no de un módulo: es
+  infraestructura, y no corresponde que la migre ningún módulo.
+- Sin store, `express-session` guarda las sesiones en memoria: se pierden al
+  reiniciar y un segundo proceso no las ve. Sirve sólo para desarrollo.
+
 ## Arranque
 
 `Samble.create()` es la única forma de construir una aplicación, y **los módulos
@@ -1499,6 +1523,37 @@ puede hacer **antes** del primer arranque.
 Sólo lo **obligatorio**. Una variable con valor por defecto en el código se lee
 con `optional()` y no se declara: declararla rechazaría un arranque que tenía un
 default perfectamente bueno.
+
+## Pruebas
+
+Una prueba arranca la aplicación como lo hace un despliegue, sobre un Postgres
+de verdad dentro del proceso:
+
+```typescript
+import { closeTestDatabase, openTestDatabase } from '@samble/core';
+import { createApp } from '../src';
+
+const db = await openTestDatabase();      // PGlite: sin servidor, sin Docker, sin .env
+const app = await createApp({ db });      // el MISMO createApp() que producción
+await app.start(0);
+// ... supertest contra app.getApp() ...
+await app.close();
+await closeTestDatabase(db);
+```
+
+- `createApp({ db })` es la forma que escribe `samble init`: con una conexión
+  pasada, no exige las variables `DB_*` y samble usa esa conexión. `_modules`,
+  cada migración, los contratos, las rutas y el resolutor de auth corren de
+  verdad. Sólo cambia la conexión, y ese es el
+  punto: una suite que simula la base prueba la simulación.
+- Cada `openTestDatabase()` es una base nueva y vacía. Abrí una por archivo de
+  pruebas.
+- samble no cierra una conexión que no abrió: la cierra
+  `closeTestDatabase(db)`.
+- `@electric-sql/pglite` es un peer opcional, dependencia de desarrollo de la
+  app. Carga su WASM con un import dinámico, así que jest corre con
+  `--experimental-vm-modules`; el script `test` que escribe `samble init` lo
+  pasa.
 
 ## Aplicación de ejemplo
 

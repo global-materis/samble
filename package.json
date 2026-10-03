@@ -1,7 +1,7 @@
 {
   "name": "@samble/core",
   "npmName": "@samble/core",
-  "version": "1.0.0-alpha.1",
+  "version": "1.0.0-alpha.2",
   "description": "Backend framework whose unit is the installable module: routes, tables, migrations, permissions and contracts declared per module.",
   "main": "./dist/lib/index.js",
   "types": "./types/lib/index.d.ts",
@@ -52,6 +52,7 @@
     "tag": "alpha"
   },
   "peerDependencies": {
+    "@electric-sql/pglite": "^0.5.0",
     "class-validator": "^0.14.0",
     "drizzle-kit": "^0.31.11",
     "drizzle-orm": "^0.45.3",
@@ -79,7 +80,7 @@
     "@electric-sql/pglite": "^0.5.8",
     "@eslint/js": "^10.0.1",
     "@jest/globals": "^29.7.0",
-    "@types/connect-pg-simple": "^7.0.0",
+    "@types/connect-pg-simple": "^7.0.3",
     "@types/cookie-parser": "^1.4.3",
     "@types/cors": "^2.8.13",
     "@types/express-session": "^1.17.7",
@@ -91,7 +92,7 @@
     "@types/swagger-ui-express": "^4.1.3",
     "bytenode": "^1.6.0",
     "class-validator": "^0.14.0",
-    "connect-pg-simple": "^9.0.0",
+    "connect-pg-simple": "^10.0.0",
     "cross-env": "^7.0.3",
     "drizzle-kit": "0.31.11",
     "drizzle-orm": "0.45.3",
@@ -113,6 +114,9 @@
   },
   "peerDependenciesMeta": {
     "drizzle-kit": {
+      "optional": true
+    },
+    "@electric-sql/pglite": {
       "optional": true
     }
   }

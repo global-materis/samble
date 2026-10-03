@@ -74,6 +74,7 @@ export type {
   Transaction,
 } from './modules/database';
 export { rows, tableExists } from './modules/database';
+export { openTestDatabase, closeTestDatabase } from './modules/test-database';
 export { Container, ContractError } from './modules/container';
 export { token } from './modules/token';
 export type { TokenKind } from './modules/token';

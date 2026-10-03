@@ -1,6 +1,6 @@
 # The API, name by name
 
-What an application writes: the 97 names you reach for, and what each one is
+What an application writes: the 99 names you reach for, and what each one is
 called. The reasoning lives in [the guide](./guide.md), the authorization rules
 in [Authorization](./authorization.md), and the commands in
 [the CLI](./cli.md).
@@ -29,6 +29,8 @@ The first four sections are enough to build something.
 | `ConfigService` | class | The environment, with the failure in the right place. `.require(names)` goes first in `createApp()` and names EVERY missing variable; `.get(name)` throws when it is absent; `.number(name)` / `.boolean(name)` validate the format; `.optional(name)` returns `string \| undefined`; `.whichMissing(names)` reports without throwing; `.all()`, `.mode()`. An empty value counts as missing. |
 | `ConfigError` | class | What `ConfigService` throws. Carries `names` with the variables involved, beside the message. |
 | `MODE` | `'production' \| 'development'` | What `ConfigService.mode()` returns. |
+| `openTestDatabase` | `(modules?) => Promise<Database>` | A fresh Postgres inside the process (PGlite), for `createApp({ db })` in a test. |
+| `closeTestDatabase` | `(db: Database) => Promise<void>` | Closes what `openTestDatabase()` opened. samble does not close a connection it did not open. |
 
 ### What a `Samble` gives you
 
@@ -47,6 +49,7 @@ The first four sections are enough to build something.
 | `permissions` | `() => RegisteredPermission[]` | Every key the installed modules declare, with its module. The catalog a roles screen renders. |
 | `getApp` | `() => Express` | The Express application, for anything samble does not wrap. |
 | `use` | `(middleware) => void` | Adds middleware to that application. |
+| `db` | `Database` (getter) | The connection samble opened or was handed, for what the app plugs in beside it — a session store over the same pool. `$client` is the driver's own object. |
 | `static` | `(pathname: string, root: string) => void` | Serves a directory of files under a URL prefix. |
 | `setTemplates` | `(engine: 'ejs' \| 'pug', root: string \| string[]) => Promise<void>` | Configures the engine `view()` renders with. |
 

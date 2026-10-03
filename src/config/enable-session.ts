@@ -2,22 +2,19 @@ import { ConfigService } from '../../lib';
 import connectPgSimple from 'connect-pg-simple';
 import { Express } from 'express';
 import session from 'express-session';
-import { Pool } from 'pg';
+import type { Pool } from 'pg';
 
-export default function enableSession(app: Express) {
-  const pool = new Pool({
-    host: ConfigService.get('DB_HOST'),
-    database: ConfigService.get('DB_NAME'),
-    port: ConfigService.number('DB_PORT'),
-    user: ConfigService.get('DB_USERNAME'),
-    password: ConfigService.get('DB_PASSWORD'),
-  });
-
+/**
+ * Cookie sessions in this demo's Postgres, over the SAME pool samble opened
+ * (`app.db.$client`): no second connection. The store package is the
+ * application's choice because the engine is — samble installs none.
+ */
+export default function enableSession(app: Express, pool: Pool) {
   const PgSession = connectPgSimple(session);
 
   const store = new PgSession({
     tableName: 'session',
-    pool: pool,
+    pool,
     createTableIfMissing: true,
   });
 
@@ -28,12 +25,12 @@ export default function enableSession(app: Express) {
     store,
     secret: ConfigService.get('SECRET_KEY'),
     resave: false,
-    saveUninitialized: true,
+    saveUninitialized: false,
     cookie: {
       maxAge: 1000 * 60 * 60 * 1,
       secure: isProd,
-      httpOnly: false,
-      sameSite: isProd ? 'none' : false,
+      httpOnly: true,
+      sameSite: isProd ? 'none' : 'lax',
     },
   });
 }

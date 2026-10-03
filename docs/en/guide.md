@@ -149,13 +149,20 @@ There is no transaction hook and no transaction decorator. Use Drizzle's own:
 
 ```typescript
 async main() {
-  return this.db.transaction(async (manager) => {
-    const charge = await manager.save(Charge, { ... });
-    await manager.update(Subscription, id, { lastChargeId: charge.id });
+  return this.db.transaction(async (tx) => {
+    const [charge] = await tx.insert(charges).values({ ... }).returning();
+    await tx
+      .update(subscriptions)
+      .set({ lastChargeId: charge.id })
+      .where(eq(subscriptions.id, id));
     return charge;
   });
 }
 ```
+
+`tx` is the same type as `this.db` minus one thing: it carries no `$client`,
+which is how you would open a second connection and step outside the
+transaction you were handed.
 
 Commit, rollback and release are the callback's contract, so they cannot be forgotten. Spreading them across lifecycle hooks — `startTransaction` in one method, `commit` in another, `rollback` in a third — hides the transaction's boundaries from the code that depends on them; that is why those hooks are gone.
 
@@ -938,6 +945,30 @@ Notes:
 - Without a resolver, reading `this.auth.actor` raises a plain `Error` (500), not
   a 401: an app that never wired auth up has a bug, not an unauthorized visitor.
 
+### Sessions
+
+samble does not keep sessions: where they live depends on the database engine,
+and the engine is the application's choice. What it gives you is its
+connection, so the store you pick shares it instead of opening a second pool:
+
+```typescript
+import connectPgSimple from 'connect-pg-simple';
+import session from 'express-session';
+import type { Pool } from 'pg';
+
+const app = await createApp();
+const PgStore = connectPgSimple(session);
+app.use(buildSession(new PgStore({ pool: app.db.$client as Pool })));
+```
+
+- `app.db` is the connection samble opened or was handed — the same one
+  endpoints get as `this.db`. `$client` is the driver's own object (a `pg`
+  Pool here).
+- The store's table belongs to the store package, not to a module: it is
+  infrastructure, and no module's migrations should own it.
+- Without a store, `express-session` keeps sessions in memory: lost on restart,
+  invisible to a second process. Fine for development only.
+
 ## Bootstrapping
 
 `Samble.create()` is the only way to build an application, and **modules are the only way to mount anything**. There is no glob-mounting API: a route or a routine belongs to a module or it does not exist.
@@ -1328,6 +1359,35 @@ ConfigService.mode(); // 'development' | 'production' from NODE_ENV
 ```
 
 The variables your app needs (database host, credentials, port, etc.) are yours to define and pass to `db` in `Samble.create`; samble does not require any specific names beyond the logging ones above.
+
+## Testing
+
+A test boots the application the way a deployment does, on a real Postgres
+inside the process:
+
+```typescript
+import { closeTestDatabase, openTestDatabase } from '@samble/core';
+import { createApp } from '../src';
+
+const db = await openTestDatabase();      // PGlite: no server, no Docker, no .env
+const app = await createApp({ db });      // the SAME createApp() as production
+await app.start(0);
+// ... supertest against app.getApp() ...
+await app.close();
+await closeTestDatabase(db);
+```
+
+- `createApp({ db })` is the shape `samble init` writes: with a connection
+  handed in, it skips the `DB_*` variables and samble uses that connection.
+  `_modules`, every migration, contracts, routes and the auth resolver all run
+  for real. Only the connection differs, which is
+  the point: a suite that mocks the database proves the mocks.
+- Each `openTestDatabase()` is a fresh, empty database. Open one per test file.
+- samble does not close a connection it did not open: `closeTestDatabase(db)`
+  does.
+- `@electric-sql/pglite` is an optional peer, a dev dependency of the app. It
+  loads its WASM with a dynamic import, so jest runs with
+  `--experimental-vm-modules`; the `test` script `samble init` writes passes it.
 
 ## Example app
 
