@@ -133,6 +133,7 @@ npx @samble/core@alpha init my-app --no-git        # no repository, no first com
 | `--skip-install` | write the files and stop |
 | `--no-git` | do not create a repository, or the first commit |
 | `--dir <path>` | where modules will live (default `src/modules`) |
+| `--db <engine>` | `postgres`, `mysql` or `sqlite`, instead of being asked |
 
 Writes:
 
@@ -150,12 +151,21 @@ src/index.ts          createApp() separated from main()
 src/config/permissions.ts
 src/config/auth.ts
 src/config/session.ts cookie sessions, and what they carry
-test/app.spec.ts      the whole app booted on a Postgres inside the process
+src/config/database.ts which engine, told to the compiler (types this.db)
+test/app.spec.ts      the whole app booted on a test database of its engine
 test/tsconfig.json    so the editor and the linter see the tests
 ```
 
 Three things in there are worth knowing about, because getting any of them
 wrong costs an evening.
+
+**It asks which database.** PostgreSQL, MySQL / MariaDB or SQLite — the
+operator's choice. `--db <engine>` answers it ahead, for a script or CI; with no
+terminal to ask on and no `--db`, it takes Postgres and says so. The answer
+decides the driver installed (and no other), the `.env`, the test database, the
+table template and the session store suggested, and it is recorded in
+`package.json` (`"samble": { "dialect": ... }`) for the generators. See
+[Databases](./guide.md#databases).
 
 **The decorator flags.** `experimentalDecorators` and `emitDecoratorMetadata`.
 Remove either and every route and every entity becomes a silent no-op —
@@ -195,8 +205,9 @@ package **and** its types are installed.
 
 **And it comes with a test that boots the application.** `test/app.spec.ts` calls
 the same `createApp()` a deployment runs, handing it `openTestDatabase()` — a
-real Postgres inside the process (PGlite) — so `npm test` needs no server and no
-`.env`. The jest configuration lives in `package.json`, and `test/tsconfig.json`
+real database of the project's engine: PGlite for Postgres and memory for
+SQLite, so `npm test` needs no server and no `.env`; MySQL has no in-process
+option, so there it needs `SAMBLE_TEST_MYSQL_URL`. The jest configuration lives in `package.json`, and `test/tsconfig.json`
 lets the editor and the type-aware lint rules read the tests while the root
 `tsconfig.json` keeps `rootDir: src` for the build. See
 [Testing](./guide.md#testing).
@@ -551,7 +562,7 @@ npx samble migration:generate billing/add-due-date --print
 | `--entry <file>` | file exporting `createApp()` |
 | `--dir <path>` | where modules live (default `src/modules`) |
 | `--print` | show the SQL and write nothing |
-| `--check` | also report what the live database is missing |
+| `--check` | also report what the live database is missing (Postgres only, for now) |
 | `--force` | overwrite a file that already exists |
 
 **It does not connect to the database**, but it does build the application through

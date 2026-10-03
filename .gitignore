@@ -2,6 +2,7 @@
 /dist
 /.bytecode
 /test/.generated
+/test/.generated-dialects
 .tsbuildinfo
 /node_modules
 .env

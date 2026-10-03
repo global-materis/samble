@@ -1,5 +1,6 @@
 import path from 'path';
 import { plan, Plan } from './plan';
+import type { DialectName } from '../modules/database';
 import {
   CliError,
   parseTarget,
@@ -37,6 +38,11 @@ export interface CommonOptions {
    * except inside this repository, where the demo imports `lib/` by path.
    */
   from: string;
+  /**
+   * The engine the project runs on, from `package.json` (`samble.dialect`).
+   * Only what writes engine-specific code reads it: a table, a migration.
+   */
+  dialect?: DialectName;
 }
 
 const HTTP_DECORATORS: Record<string, string> = {
@@ -620,14 +626,11 @@ export function createTable(options: TableOptions): Plan {
   const table =
     options.table ?? `${toSnake(target.module)}_${toSnake(target.name)}`;
 
-  const content = `${importLine(
-    ['pgTable', 'serial', 'text'],
-    'drizzle-orm/pg-core',
-  )}
+  const shape = TABLE_SHAPES[options.dialect ?? 'postgres'];
+  const content = `${importLine(shape.imports, shape.from)}
 
-export const ${constName} = pgTable('${table}', {
-  id: serial('id').primaryKey(),
-  name: text('name').notNull(),
+export const ${constName} = ${shape.builder}('${table}', {
+${shape.columns}
 });
 
 export type ${rowType} = typeof ${constName}.$inferSelect;
@@ -640,10 +643,48 @@ export type New${rowType} = typeof ${constName}.$inferInsert;
     [
       `The table is not created by declaring it: generate the migration — samble migration:generate ${target.module}/create-${target.name}.`,
       `Read it: this.db.select().from(${constName}), typed from the table without passing a schema anywhere.`,
-      'An ENUM has to be EXPORTED from a file under tables/, not only used by a column: a schema without it generates DDL that references a type nothing creates.',
+      ...(options.dialect === undefined || options.dialect === 'postgres'
+        ? [
+            'An ENUM has to be EXPORTED from a file under tables/, not only used by a column: a schema without it generates DDL that references a type nothing creates.',
+          ]
+        : []),
     ],
   );
 }
+
+/**
+ * The starting table per engine: an auto-numbered id and one column.
+ *
+ * MySQL's id is `int().autoincrement()` and not `serial()`, on purpose: Drizzle
+ * Kit writes a serial as `serial AUTO_INCREMENT`, which MySQL accepts and
+ * MariaDB refuses — and the operator's "MySQL" is often a MariaDB.
+ */
+const TABLE_SHAPES: Record<
+  DialectName,
+  { imports: string[]; from: string; builder: string; columns: string }
+> = {
+  postgres: {
+    imports: ['pgTable', 'serial', 'text'],
+    from: 'drizzle-orm/pg-core',
+    builder: 'pgTable',
+    columns: `  id: serial('id').primaryKey(),
+  name: text('name').notNull(),`,
+  },
+  mysql: {
+    imports: ['int', 'mysqlTable', 'varchar'],
+    from: 'drizzle-orm/mysql-core',
+    builder: 'mysqlTable',
+    columns: `  id: int('id').autoincrement().primaryKey(),
+  name: varchar('name', { length: 255 }).notNull(),`,
+  },
+  sqlite: {
+    imports: ['integer', 'sqliteTable', 'text'],
+    from: 'drizzle-orm/sqlite-core',
+    builder: 'sqliteTable',
+    columns: `  id: integer('id').primaryKey({ autoIncrement: true }),
+  name: text('name').notNull(),`,
+  },
+};
 
 export interface MigrationOptions extends CommonOptions {
   target: string;
@@ -658,13 +699,15 @@ export function createMigration(options: MigrationOptions): Plan {
   const className = `${toPascal(target.name)}${stamp}`;
   const file = `${stamp}-${target.name}`;
   const from = relativeFrom(options.from, 3);
+  // SQLite's Drizzle database has no `execute`: a raw statement is `run`.
+  const method = options.dialect === 'sqlite' ? 'run' : 'execute';
 
   const content = `import { sql } from 'drizzle-orm';
 import type { Migration, Transaction } from '${from}';
 
 export class ${className} implements Migration {
   public async up(db: Transaction): Promise<void> {
-    await db.execute(
+    await db.${method}(
       sql.raw(\`
         -- what this migration creates
       \`),
@@ -676,7 +719,7 @@ export class ${className} implements Migration {
   }
 
   public async down(db: Transaction): Promise<void> {
-    await db.execute(
+    await db.${method}(
       sql.raw(\`
         -- how to undo it
       \`),

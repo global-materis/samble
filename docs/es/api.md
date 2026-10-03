@@ -1,6 +1,6 @@
 # La API, nombre por nombre
 
-Lo que escribe una aplicación: los 99 nombres que vas a usar, y cómo se llama
+Lo que escribe una aplicación: los 101 nombres que vas a usar, y cómo se llama
 cada uno. El por qué está en [la guía](./guide.md), las reglas de permisos en
 [Autorización](./authorization.md), y los comandos en [el CLI](./cli.md).
 
@@ -27,7 +27,9 @@ Con las primeras cuatro secciones ya podés construir algo.
 | `DocsConfig` | interface | `{ path?, info? }` — dónde contesta `/docs` y qué dice el documento OpenAPI de sí mismo. |
 | `ConfigService` | clase | El entorno, con el fallo en el lugar correcto. `.require(names)` va primero en `createApp()` y nombra TODAS las que faltan; `.get(name)` lanza si falta; `.number(name)` / `.boolean(name)` validan el formato; `.optional(name)` devuelve `string \| undefined`; `.whichMissing(names)` informa sin lanzar; `.all()`, `.mode()`. Una variable vacía cuenta como ausente. |
 | `ConfigError` | clase | Lo que lanzan los métodos de `ConfigService`. Lleva `names` con las variables involucradas, aparte del mensaje. |
-| `openTestDatabase` | `(modules?) => Promise<Database>` | Un Postgres nuevo dentro del proceso (PGlite), para `createApp({ db })` en una prueba. |
+| `openTestDatabase` | `(options?: TestDatabaseOptions) => Promise<Database>` | Una base nueva del motor de la app, para `createApp({ db })` en una prueba: PGlite, memoria para SQLite, una base propia en `SAMBLE_TEST_MYSQL_URL` para MySQL. |
+| `TestDatabaseOptions` | interface | `{ dialect?, modules? }` — lo que recibe `openTestDatabase()`. |
+| `DialectName` | `'postgres' \| 'mysql' \| 'sqlite'` | Los motores sobre los que corre samble; `db: { dialect }` en `Samble.create()`. |
 | `closeTestDatabase` | `(db: Database) => Promise<void>` | Cierra lo que abrió `openTestDatabase()`. samble no cierra una conexión que no abrió. |
 | `MODE` | `'production' \| 'development'` | Lo que devuelve `ConfigService.mode()`. |
 
@@ -47,6 +49,7 @@ Con las primeras cuatro secciones ya podés construir algo.
 | `tableOwners` | `() => Map<string, string>` | Qué módulo es dueño de cada tabla, leído de las tablas que cada uno declara. |
 | `permissions` | `() => RegisteredPermission[]` | Todas las claves que declaran los módulos instalados, con su módulo. El catálogo que dibuja una pantalla de roles. |
 | `getApp` | `() => Express` | La aplicación de Express, para todo lo que samble no envuelve. |
+| `dialect` | `Dialect` | El motor de esta app, leído de su conexión. `dialect.name` es el `DialectName`. |
 | `db` | `Database` (getter) | La conexión que samble abrió o recibió, para lo que la app enchufa al lado — un store de sesiones sobre el mismo pool. `$client` es el objeto del driver. |
 | `use` | `(middleware) => void` | Agrega middleware a esa aplicación. |
 | `static` | `(pathname: string, root: string) => void` | Sirve un directorio de archivos bajo un prefijo de URL. |

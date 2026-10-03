@@ -1,5 +1,4 @@
-import { getTableName, is } from 'drizzle-orm';
-import { PgTable } from 'drizzle-orm/pg-core';
+import { getTableName, is, Table } from 'drizzle-orm';
 import {
   ModuleDefinitionError,
   ModuleTable,
@@ -36,9 +35,7 @@ export function collectModuleTables(
         // The SQL name when there is one: an enum or a sequence has no
         // `getTableName`, and a message that says "a table" is still better
         // than one that says `[object Object]`.
-        const named = is(table, PgTable)
-          ? `"${getTableName(table)}"`
-          : 'A table';
+        const named = is(table, Table) ? `"${getTableName(table)}"` : 'A table';
         throw new ModuleDefinitionError(
           `${named} is declared by both "${previous}" and "${mod.id}". It belongs to exactly one module.`,
           mod.id,

@@ -32,6 +32,11 @@ export interface GenerateMigrationOptions {
   from?: string;
   /** Fixed clock, for tests. */
   now?: number;
+  /**
+   * How the engine runs a raw statement: `execute`, or `run` on SQLite, where
+   * Drizzle has no `execute`. The dialect's `statementMethod`.
+   */
+  method?: 'execute' | 'run';
 }
 
 /** What prettier wraps at, and what samble therefore has to wrap at. */
@@ -69,19 +74,19 @@ const escape = (sql: string): string =>
  * takes the middle form: prettier cannot fold a literal that already has
  * newlines in it, and it will not leave it on the same line as the call.
  */
-const statement = (query: string): string => {
+const statement = (query: string, method: string): string => {
   const literal = `${BACKTICK}${escape(query)}${BACKTICK}`;
-  const oneLine = `    await db.execute(sql.raw(${literal}));`;
+  const oneLine = `    await db.${method}(sql.raw(${literal}));`;
 
   if (!literal.includes('\n') && oneLine.length <= WIDTH) return oneLine;
 
   const inner = `      sql.raw(${literal}),`;
   if (literal.includes('\n') || inner.length <= WIDTH) {
-    return `    await db.execute(\n${inner}\n    );`;
+    return `    await db.${method}(\n${inner}\n    );`;
   }
 
   return [
-    '    await db.execute(',
+    `    await db.${method}(`,
     '      sql.raw(',
     `        ${literal},`,
     '      ),',
@@ -89,8 +94,8 @@ const statement = (query: string): string => {
   ].join('\n');
 };
 
-const statements = (queries: string[]): string =>
-  queries.map(statement).join('\n');
+const statements = (queries: string[], method: string): string =>
+  queries.map((query) => statement(query, method)).join('\n');
 
 /**
  * The `down()`, or nothing at all.
@@ -101,12 +106,12 @@ const statements = (queries: string[]): string =>
  * difference can be said. It also keeps an unused parameter out of a file that
  * has to pass the consumer's lint.
  */
-const undo = (queries: string[]): string => {
+const undo = (queries: string[], method: string): string => {
   if (queries.length === 0) return '';
 
   return `
   public async down(db: Transaction): Promise<void> {
-${statements(queries)}
+${statements(queries, method)}
   }
 `;
 };
@@ -145,15 +150,16 @@ export function generateMigration(options: GenerateMigrationOptions): Plan {
   const stamp = options.now ?? Date.now();
   const className = `${toPascal(target.name)}${stamp}`;
   const from = options.from ?? '@samble/core';
+  const method = options.method ?? 'execute';
 
   const content = `import { sql } from 'drizzle-orm';
 import type { Migration, Transaction } from '${from}';
 
 export class ${className} implements Migration {
   public async up(db: Transaction): Promise<void> {
-${statements(options.diff.up)}
+${statements(options.diff.up, method)}
   }
-${undo(options.diff.down)}}
+${undo(options.diff.down, method)}}
 `;
 
   const hints = [

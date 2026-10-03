@@ -1,6 +1,6 @@
 import type { RequestHandler } from 'express';
 import { sql } from 'drizzle-orm';
-import type { Database } from '../modules/database';
+import { run, type Database } from '../modules/database';
 
 /**
  * Is this application able to serve?
@@ -106,7 +106,7 @@ async function databaseAnswers(db: Database): Promise<boolean> {
     // One statement, and no "is it initialized" shortcut: a pool reports itself
     // open while every connection in it is broken, and a probe that trusts a
     // flag over a round trip answers healthy right through an outage.
-    await db.execute(sql`select 1`);
+    await run(db, sql`select 1`);
     return true;
   } catch {
     return false;

@@ -10,6 +10,7 @@ node_modules
 # Projects the CLI scaffolds during the tests. They are written by the
 # generators, and the generators are what the assertions read.
 test/.generated
+test/.generated-dialects
 
 # Markdown here is hand-set prose and tables. Prettier reflows both and the
 # diff is all noise.

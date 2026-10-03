@@ -12,17 +12,18 @@ This project is designed for developers who are looking for a simple and fast al
 
 ## Requirements
 
-- **Node.js >= 20**
-- **PostgreSQL** reachable at startup
+- **Node.js >= 22.13**
+- A database: **PostgreSQL**, **MySQL / MariaDB** or **SQLite** — see
+  [Databases](#databases)
 - `reflect-metadata` is loaded by the framework itself — you do not need to import it
 
 ## Install
 
 ```bash
-npm install samble
+npx @samble/core@alpha init my-app   # asks which database
 ```
 
-`samble` relies on a few peer dependencies you provide in your app: `drizzle-orm`, `express`, `class-validator` and `typescript`. Add `express-session` only if your auth resolver uses cookie sessions — the framework no longer depends on it.
+`samble` relies on a few peer dependencies you provide in your app: `drizzle-orm`, `express`, `class-validator`, `typescript` and the driver of your engine (`pg`, `mysql2` or `@libsql/client`). Add `express-session` only if your auth resolver uses cookie sessions — the framework no longer depends on it.
 
 ## Feature status
 
@@ -355,7 +356,7 @@ application cannot assemble by hand without knowing each module's internals:
 
 ```typescript
 const app = await Samble.create({
-  db: { type: 'postgres', host, database },
+  db: { dialect: 'postgres', host, database },
   modules: [identity, billing, inventory],
   version: '2.0.0',      // this app's own version, reported by /health
   basePath: '/api',      // prefix for module routes
@@ -798,6 +799,72 @@ The rules that keep announcing from turning into a call with extra steps:
 `db.transaction()` means they will not see the uncommitted rows — announce
 *after* it commits, or put what they need in the payload.
 
+## Databases
+
+samble runs on **PostgreSQL**, **MySQL / MariaDB** and **SQLite**. Which one is
+the operator's decision, not the framework's: it keeps one adapter per engine
+and loads only the driver of the one in use.
+
+| Engine | `dialect` | Driver to install | Test database |
+| --- | --- | --- | --- |
+| PostgreSQL | `postgres` (default) | `pg` | PGlite, in the process |
+| MySQL / MariaDB | `mysql` | `mysql2` | a server: `SAMBLE_TEST_MYSQL_URL` |
+| SQLite | `sqlite` | `@libsql/client` | in memory |
+
+`samble init` asks which one, or takes `--db <engine>`, and writes the rest:
+the driver, the `.env`, the test database, the table template and the session
+store suggestion. It records the choice in three places, each read by somebody
+else:
+
+```typescript
+// src/index.ts — what opens the connection
+Samble.create({ db: { dialect: 'mysql', host, user, password, database }, ... });
+
+// src/config/database.ts — what types `this.db`
+declare global {
+  namespace SambleDatabase {
+    interface Config {
+      dialect: 'mysql';
+    }
+  }
+}
+```
+
+```json
+// package.json — what `samble table` and `samble migration` write
+"samble": { "dialect": "mysql" }
+```
+
+The declaration is what makes `this.db` the engine's own Drizzle type: on MySQL
+`.returning()` does not compile, because MySQL has no `RETURNING`. With no
+declaration the type is Postgres. A connection handed in (`db: someDrizzle`) is
+recognized by itself: samble reads the dialect off it.
+
+**A module's tables are written for the engine the application runs on.** A
+`pgTable` in an application on SQLite is refused at boot, by name:
+
+```
+Module "billing" declares tables for postgres, and this application runs on sqlite.
+```
+
+### What differs per engine
+
+- **MySQL commits every DDL statement when it runs**, inside a transaction or
+  not. A migration that creates two tables and fails on the second leaves the
+  first behind, unrecorded, so the next run fails on "already exists". Postgres
+  and SQLite roll the whole migration back. On MySQL, keep a migration to one DDL
+  statement where it matters, or make it re-runnable (`if not exists`).
+- **MariaDB is not MySQL in every detail.** Drizzle Kit writes a `serial()`
+  column as `serial AUTO_INCREMENT`, which MySQL accepts and MariaDB refuses;
+  the table template uses `int().autoincrement()` for that reason.
+- **SQLite runs statements with `run`**, not `execute`: Drizzle's SQLite
+  database has no `execute`. Generated migrations already use it.
+- **Comparing the live schema** (`schemaDrift()`, `migration:generate --check`)
+  works on **Postgres only** for now. Drizzle Kit's comparison for MySQL and
+  SQLite takes the whole database and cannot be limited to the modules' tables,
+  so it would report samble's own `_modules` as drift; samble refuses rather
+  than answer wrong. Generating migrations works on all three.
+
 ## Trying a local build
 
 To test an unpublished version against your own project:
@@ -963,7 +1030,8 @@ app.use(buildSession(new PgStore({ pool: app.db.$client as Pool })));
 
 - `app.db` is the connection samble opened or was handed — the same one
   endpoints get as `this.db`. `$client` is the driver's own object (a `pg`
-  Pool here).
+  Pool here). On MySQL the equivalent is `express-mysql-session` over the
+  `mysql2` pool; `samble init` writes the line for the engine you chose.
 - The store's table belongs to the store package, not to a module: it is
   infrastructure, and no module's migrations should own it.
 - Without a store, `express-session` keeps sessions in memory: lost on restart,
@@ -1369,7 +1437,7 @@ inside the process:
 import { closeTestDatabase, openTestDatabase } from '@samble/core';
 import { createApp } from '../src';
 
-const db = await openTestDatabase();      // PGlite: no server, no Docker, no .env
+const db = await openTestDatabase();      // Postgres: PGlite, no server, no .env
 const app = await createApp({ db });      // the SAME createApp() as production
 await app.start(0);
 // ... supertest against app.getApp() ...
@@ -1382,11 +1450,15 @@ await closeTestDatabase(db);
   `_modules`, every migration, contracts, routes and the auth resolver all run
   for real. Only the connection differs, which is
   the point: a suite that mocks the database proves the mocks.
+- `openTestDatabase({ dialect })` follows the engine: PGlite for Postgres,
+  memory for SQLite, and for MySQL — which has no in-process option — a
+  database of its own created on the server `SAMBLE_TEST_MYSQL_URL` points at,
+  and dropped on close. Nothing already on that server is touched.
 - Each `openTestDatabase()` is a fresh, empty database. Open one per test file.
 - samble does not close a connection it did not open: `closeTestDatabase(db)`
   does.
-- `@electric-sql/pglite` is an optional peer, a dev dependency of the app. It
-  loads its WASM with a dynamic import, so jest runs with
+- `@electric-sql/pglite` is an optional peer, a dev dependency of a Postgres
+  app. It loads its WASM with a dynamic import, so jest runs with
   `--experimental-vm-modules`; the `test` script `samble init` writes passes it.
 
 ## Example app

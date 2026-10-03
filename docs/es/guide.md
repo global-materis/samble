@@ -23,18 +23,20 @@ manteniendo una estructura sólida y extensible.
 
 ## Requisitos
 
-- **Node.js >= 20**
-- **PostgreSQL** alcanzable al arrancar
+- **Node.js >= 22.13**
+- Una base de datos: **PostgreSQL**, **MySQL / MariaDB** o **SQLite** — mirá
+  [Bases de datos](#bases-de-datos)
 - `reflect-metadata` lo carga el framework — no hace falta que lo importes
 
 ## Instalación
 
 ```bash
-npm install samble
+npx @samble/core@alpha init my-app   # pregunta qué base de datos
 ```
 
 `samble` se apoya en unas pocas dependencias que ponés vos: `drizzle-orm`, `express`,
-`class-validator` y `typescript`. Agregá `express-session` sólo si tu resolutor
+`class-validator`, `typescript` y el driver de tu motor (`pg`, `mysql2` o
+`@libsql/client`). Agregá `express-session` sólo si tu resolutor
 de autenticación usa sesiones por cookie — el framework ya no depende de él.
 
 ## Estado de las funciones
@@ -849,6 +851,73 @@ Las reglas que evitan que anunciar se convierta en una llamada con pasos de más
 `db.transaction()` significa que no van a ver las filas sin confirmar — anunciá
 *después* de que confirme, o poné lo que necesitan en la carga.
 
+## Bases de datos
+
+samble corre sobre **PostgreSQL**, **MySQL / MariaDB** y **SQLite**. Cuál es
+decisión del operador, no del framework: tiene un adaptador por motor y carga
+sólo el driver del que se usa.
+
+| Motor | `dialect` | Driver a instalar | Base de pruebas |
+| --- | --- | --- | --- |
+| PostgreSQL | `postgres` (por defecto) | `pg` | PGlite, dentro del proceso |
+| MySQL / MariaDB | `mysql` | `mysql2` | un servidor: `SAMBLE_TEST_MYSQL_URL` |
+| SQLite | `sqlite` | `@libsql/client` | en memoria |
+
+`samble init` pregunta cuál, o lo recibe con `--db <motor>`, y escribe el resto:
+el driver, el `.env`, la base de pruebas, la plantilla de tablas y la sugerencia
+de store de sesiones. Anota la elección en tres lugares, y cada uno lo lee
+alguien distinto:
+
+```typescript
+// src/index.ts — lo que abre la conexión
+Samble.create({ db: { dialect: 'mysql', host, user, password, database }, ... });
+
+// src/config/database.ts — lo que tipa `this.db`
+declare global {
+  namespace SambleDatabase {
+    interface Config {
+      dialect: 'mysql';
+    }
+  }
+}
+```
+
+```json
+// package.json — lo que escriben `samble table` y `samble migration`
+"samble": { "dialect": "mysql" }
+```
+
+La declaración es lo que hace que `this.db` sea el tipo de Drizzle del motor: en
+MySQL `.returning()` no compila, porque MySQL no tiene `RETURNING`. Sin
+declaración el tipo es el de Postgres. Una conexión pasada desde afuera
+(`db: unDrizzle`) se reconoce sola: samble le lee el dialecto.
+
+**Las tablas de un módulo se escriben para el motor en que corre la
+aplicación.** Un `pgTable` en una aplicación sobre SQLite se rechaza al
+arrancar, por nombre:
+
+```
+Module "billing" declares tables for postgres, and this application runs on sqlite.
+```
+
+### Lo que cambia según el motor
+
+- **MySQL confirma cada sentencia DDL al ejecutarla**, dentro de una transacción
+  o no. Una migración que crea dos tablas y falla en la segunda deja la primera,
+  sin anotar, así que la siguiente corrida falla con "already exists". Postgres y
+  SQLite revierten la migración entera. En MySQL, dejá una sentencia DDL por
+  migración donde importe, o hacela re-ejecutable (`if not exists`).
+- **MariaDB no es MySQL en todo.** Drizzle Kit escribe una columna `serial()`
+  como `serial AUTO_INCREMENT`, que MySQL acepta y MariaDB rechaza; por eso la
+  plantilla de tablas usa `int().autoincrement()`.
+- **SQLite ejecuta con `run`**, no con `execute`: la base de Drizzle para SQLite
+  no tiene `execute`. Las migraciones generadas ya lo usan.
+- **Comparar el esquema vivo** (`schemaDrift()`, `migration:generate --check`)
+  funciona **sólo en Postgres** por ahora. La comparación de Drizzle Kit para
+  MySQL y SQLite toma la base entera y no se puede limitar a las tablas de los
+  módulos, así que informaría el `_modules` de samble como diferencia; samble se
+  niega antes que contestar mal. Generar migraciones funciona en los tres.
+
 ## Probar una compilación local
 
 Para probar una versión sin publicar contra tu propio proyecto:
@@ -1036,7 +1105,7 @@ import identity from './modules/identity/module';
 import billing from './modules/billing/module';
 
 const app = await Samble.create({
-  db: { type: 'postgres' /* ... */ }, // o un DataSource que ya tenés
+  db: { dialect: 'postgres' /* ... */ }, // o una conexión de Drizzle que ya tenés
   modules: [identity, billing],
   version: '3.0.0',
   basePath: '/api',
@@ -1533,7 +1602,7 @@ de verdad dentro del proceso:
 import { closeTestDatabase, openTestDatabase } from '@samble/core';
 import { createApp } from '../src';
 
-const db = await openTestDatabase();      // PGlite: sin servidor, sin Docker, sin .env
+const db = await openTestDatabase();      // Postgres: PGlite, sin servidor ni .env
 const app = await createApp({ db });      // el MISMO createApp() que producción
 await app.start(0);
 // ... supertest contra app.getApp() ...
@@ -1546,12 +1615,16 @@ await closeTestDatabase(db);
   cada migración, los contratos, las rutas y el resolutor de auth corren de
   verdad. Sólo cambia la conexión, y ese es el
   punto: una suite que simula la base prueba la simulación.
+- `openTestDatabase({ dialect })` sigue al motor: PGlite para Postgres, memoria
+  para SQLite, y para MySQL — que no tiene opción dentro del proceso — una base
+  propia creada en el servidor al que apunta `SAMBLE_TEST_MYSQL_URL`, que se
+  borra al cerrar. No toca nada de lo que ya hay en ese servidor.
 - Cada `openTestDatabase()` es una base nueva y vacía. Abrí una por archivo de
   pruebas.
 - samble no cierra una conexión que no abrió: la cierra
   `closeTestDatabase(db)`.
-- `@electric-sql/pglite` es un peer opcional, dependencia de desarrollo de la
-  app. Carga su WASM con un import dinámico, así que jest corre con
+- `@electric-sql/pglite` es un peer opcional, dependencia de desarrollo de una
+  app sobre Postgres. Carga su WASM con un import dinámico, así que jest corre con
   `--experimental-vm-modules`; el script `test` que escribe `samble init` lo
   pasa.
 

@@ -30,6 +30,7 @@ export default defineConfig([
     // Projects the CLI scaffolds during the tests: they resolve against their
     // own node_modules and are not ours to lint.
     'test/.generated',
+    'test/.generated-dialects',
     // Build helpers in plain JS: not TypeScript, and not what this config is
     // parameterised for.
     'scripts',

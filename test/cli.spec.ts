@@ -301,12 +301,89 @@ describe('samble init', () => {
       '.env',
       '.env.template',
       'src/index.ts',
+      'src/config/database.ts',
       'src/config/permissions.ts',
       'src/config/auth.ts',
       'src/config/session.ts',
       'test/tsconfig.json',
       'test/app.spec.ts',
     ]);
+  });
+
+  it('el motor lo elige el operador, y se instala sólo el suyo', () => {
+    const conMotor = (dialect: 'postgres' | 'mysql' | 'sqlite') => {
+      const archivos = createProject({
+        name: 'mi-app',
+        sambleVersion,
+        dialect,
+      }).files;
+      const busca = (ruta: string) =>
+        archivos.find((file) => file.path === ruta)!.content;
+      return { busca, pkg: JSON.parse(busca('package.json')) };
+    };
+    const drivers = ['pg', 'mysql2', '@libsql/client'];
+
+    for (const [dialect, driver] of [
+      ['postgres', 'pg'],
+      ['mysql', 'mysql2'],
+      ['sqlite', '@libsql/client'],
+    ] as const) {
+      const { busca, pkg } = conMotor(dialect);
+
+      // Su driver y ningún otro: nadie instala un paquete para un motor que
+      // no corre.
+      expect(pkg.dependencies).toHaveProperty(driver);
+      drivers
+        .filter((otro) => otro !== driver)
+        .forEach((otro) => expect(pkg.dependencies).not.toHaveProperty(otro));
+      // PGlite es Postgres: sólo lo trae quien prueba sobre Postgres.
+      expect(pkg.devDependencies['@electric-sql/pglite'] !== undefined).toBe(
+        dialect === 'postgres',
+      );
+
+      // Queda anotado donde lo leen los generadores (tablas, migraciones)…
+      expect(pkg.samble).toEqual({ dialect });
+      // …en el arranque…
+      expect(busca('src/index.ts')).toContain(`dialect: '${dialect}'`);
+      expect(busca('src/index.ts')).toContain("import './config/database';");
+      // …y en el compilador, que tipa `this.db` según el motor.
+      expect(busca('src/config/database.ts')).toContain(
+        `dialect: '${dialect}';`,
+      );
+    }
+
+    // Cada motor con sus variables, y las pruebas sobre su propia base.
+    expect(conMotor('postgres').busca('.env')).toContain('DB_PORT=5432');
+    expect(conMotor('postgres').busca('test/app.spec.ts')).toContain(
+      'openTestDatabase()',
+    );
+
+    const mysql = conMotor('mysql');
+    expect(mysql.busca('.env')).toContain('DB_PORT=3306');
+    // No hay MySQL dentro del proceso: las pruebas necesitan un servidor.
+    expect(mysql.busca('.env')).toContain(
+      'SAMBLE_TEST_MYSQL_URL=mysql://root@localhost:3306',
+    );
+    expect(mysql.busca('test/app.spec.ts')).toContain(
+      "openTestDatabase({ dialect: 'mysql' })",
+    );
+    // Un MySQL local suele tener la clave de root VACÍA, y require() cuenta
+    // un valor vacío como faltante.
+    const requeridas = mysql
+      .busca('src/index.ts')
+      .split('ConfigService.require([')[1]
+      .split(']);')[0];
+    expect(requeridas).not.toContain('DB_PASSWORD');
+    expect(mysql.busca('src/index.ts')).toContain(
+      "ConfigService.optional('DB_PASSWORD') ?? ''",
+    );
+
+    const sqlite = conMotor('sqlite');
+    expect(sqlite.busca('.env')).toContain('DB_URL=file:mi_app.db');
+    expect(sqlite.busca('src/index.ts')).toContain(
+      "ConfigService.require(['SESSION_SECRET', ...(options.db ? [] : ['DB_URL'])]);",
+    );
+    expect(sqlite.busca('.gitignore')).toContain('*.db');
   });
 
   it('nace con pruebas que arrancan la app entera, sin servidor ni .env', () => {
@@ -1206,5 +1283,85 @@ describe('un módulo generado y puesto a andar', () => {
         path.join(workspace, modulesDir, 'inventory/migrations/index.ts'),
       ),
     ).toBe(false);
+  });
+});
+
+describe('lo que escribe código del motor sigue al motor del proyecto', () => {
+  const tabla = (dialect?: 'postgres' | 'mysql' | 'sqlite') =>
+    createTable({
+      target: 'billing/charge',
+      modulesDir,
+      from: '@samble/core',
+      dialect,
+    }).files[0].content;
+  const migracion = (dialect?: 'postgres' | 'mysql' | 'sqlite') =>
+    createMigration({
+      target: 'billing/create-charges',
+      modulesDir,
+      from: '@samble/core',
+      dialect,
+      now: 1,
+    }).files[0].content;
+
+  it('la tabla usa el constructor de su motor', () => {
+    expect(tabla()).toContain("pgTable('billing_charge'");
+    expect(tabla('postgres')).toContain("from 'drizzle-orm/pg-core'");
+    expect(tabla('sqlite')).toContain("sqliteTable('billing_charge'");
+    expect(tabla('sqlite')).toContain('primaryKey({ autoIncrement: true })');
+    expect(tabla('mysql')).toContain("mysqlTable('billing_charge'");
+    // int().autoincrement() y no serial(): Drizzle Kit escribe un serial como
+    // `serial AUTO_INCREMENT`, que MariaDB rechaza.
+    expect(tabla('mysql')).toContain("int('id').autoincrement().primaryKey()");
+    expect(tabla('mysql')).not.toContain('serial');
+  });
+
+  it('la migración usa el método que tiene el motor', () => {
+    expect(migracion()).toContain('await db.execute(');
+    expect(migracion('mysql')).toContain('await db.execute(');
+    // La base de Drizzle para SQLite no tiene `execute`.
+    expect(migracion('sqlite')).toContain('await db.run(');
+    expect(migracion('sqlite')).not.toContain('execute');
+  });
+
+  it('lo generado entra en el ancho de prettier en los tres', () => {
+    for (const dialect of ['postgres', 'mysql', 'sqlite'] as const) {
+      for (const linea of [
+        ...tabla(dialect).split('\n'),
+        ...migracion(dialect).split('\n'),
+      ]) {
+        expect(linea.length).toBeLessThanOrEqual(80);
+      }
+    }
+  });
+});
+
+describe('lo que escribe init ya viene formateado, en los tres motores', () => {
+  // El proyecto corre `prettier --check` en CI: un archivo del andamiaje que
+  // prettier reescribiría le rompe el lint en su primer commit. Medirlo con
+  // prettier mismo es la única forma de no adivinar dónde parte una línea.
+  it('prettier no cambiaría nada', async () => {
+    const prettier = await import('prettier');
+    for (const dialect of ['postgres', 'mysql', 'sqlite'] as const) {
+      const archivos = createProject({
+        name: 'mi-app',
+        sambleVersion,
+        dialect,
+      }).files;
+      const opciones = JSON.parse(
+        archivos.find((file) => file.path === '.prettierrc')!.content,
+      );
+      for (const archivo of archivos) {
+        if (!/\.(ts|json|mjs)$/.test(archivo.path)) continue;
+        const listo = await prettier.check(archivo.content, {
+          ...opciones,
+          filepath: archivo.path,
+        });
+        expect({ dialect, archivo: archivo.path, listo }).toEqual({
+          dialect,
+          archivo: archivo.path,
+          listo: true,
+        });
+      }
+    }
   });
 });

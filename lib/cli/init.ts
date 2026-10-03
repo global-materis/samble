@@ -1,5 +1,6 @@
 import { execFileSync } from 'child_process';
 import { randomBytes } from 'crypto';
+import type { DialectName } from '../modules/database';
 import { CliError, toKebab } from './names';
 import { plan, Plan } from './plan';
 
@@ -19,13 +20,151 @@ export interface InitOptions {
   sambleVersion: string;
   /** Where modules will live. */
   modulesDir?: string;
+  /**
+   * The database engine. The operator's choice: it decides the driver, the
+   * \`.env\`, the test database and the session store suggested — and nothing
+   * for another engine is installed. Defaults to \`postgres\`.
+   */
+  dialect?: DialectName;
 }
+
+/**
+ * What changes per engine in a new project, in one table.
+ *
+ * Kept as data so the rest of \`init\` reads the same for every engine, and so
+ * a fourth engine is one more row here instead of a branch in every template.
+ */
+interface EngineScaffold {
+  label: string;
+  /** Runtime driver. */
+  driver: Record<string, string>;
+  /** Only what the TEST database needs on this engine. */
+  testDeps: Record<string, string>;
+  /** The variables createApp() requires, besides SESSION_SECRET. */
+  required: string[];
+  /** The \`db\` option, as code. */
+  options: string;
+  /** The .env lines for the database. */
+  env: (name: string) => string;
+  /** How a session store for this engine is built over app.db. */
+  sessionStore: string;
+  /** Extra lines for .gitignore. */
+  ignore: string[];
+}
+
+const ENGINES: Record<DialectName, EngineScaffold> = {
+  postgres: {
+    label: 'PostgreSQL',
+    driver: { pg: '^8.11.2' },
+    testDeps: { '@electric-sql/pglite': '^0.5.8' },
+    required: ['DB_HOST', 'DB_PORT', 'DB_USERNAME', 'DB_PASSWORD', 'DB_NAME'],
+    options: `{
+      dialect: 'postgres',
+      host: ConfigService.get('DB_HOST'),
+      // \`number\` and not \`+get(...)\`: a value with a stray space or a
+      // comment on the line would reach the driver as NaN.
+      port: ConfigService.number('DB_PORT'),
+      user: ConfigService.get('DB_USERNAME'),
+      password: ConfigService.get('DB_PASSWORD'),
+      database: ConfigService.get('DB_NAME'),
+    }`,
+    env: (name) => `DB_HOST=localhost
+DB_PORT=5432
+DB_USERNAME=postgres
+DB_PASSWORD=
+DB_NAME=${name}
+`,
+    sessionStore: ` *   // npm install connect-pg-simple
+ *   const PgStore = connectPgSimple(session);
+ *   app.use(buildSession(new PgStore({ pool: app.db.$client as Pool })));`,
+    ignore: [],
+  },
+  mysql: {
+    label: 'MySQL / MariaDB',
+    driver: { mysql2: '^3.11.0' },
+    testDeps: {},
+    // No DB_PASSWORD: read with optional() below, see why there.
+    required: ['DB_HOST', 'DB_PORT', 'DB_USERNAME', 'DB_NAME'],
+    options: `{
+      dialect: 'mysql',
+      host: ConfigService.get('DB_HOST'),
+      // \`number\` and not \`+get(...)\`: a value with a stray space or a
+      // comment on the line would reach the driver as NaN.
+      port: ConfigService.number('DB_PORT'),
+      user: ConfigService.get('DB_USERNAME'),
+      // optional(): a local MySQL often has an EMPTY root password, and an
+      // empty value counts as missing for require().
+      password: ConfigService.optional('DB_PASSWORD') ?? '',
+      database: ConfigService.get('DB_NAME'),
+    }`,
+    env: (name) => `DB_HOST=localhost
+DB_PORT=3306
+DB_USERNAME=root
+DB_PASSWORD=
+DB_NAME=${name}
+
+# Where the tests create (and drop) a database of their own. There is no MySQL
+# inside the process, so they need a server: an account allowed to create
+# databases.
+SAMBLE_TEST_MYSQL_URL=mysql://root@localhost:3306
+`,
+    sessionStore: ` *   // npm install express-mysql-session
+ *   const MySQLStore = expressMySqlSession(session);
+ *   app.use(buildSession(new MySQLStore({}, app.db.$client as Pool)));`,
+    ignore: [],
+  },
+  sqlite: {
+    label: 'SQLite',
+    driver: { '@libsql/client': '^0.15.0' },
+    testDeps: {},
+    required: ['DB_URL'],
+    options: `{
+      dialect: 'sqlite',
+      url: ConfigService.get('DB_URL'),
+      // Only for a libsql server; a local file needs none.
+      authToken: ConfigService.optional('DB_AUTH_TOKEN'),
+    }`,
+    env: (
+      name,
+    ) => `# A local file, or a libsql server URL (then also DB_AUTH_TOKEN).
+DB_URL=file:${name}.db
+`,
+    sessionStore: ` *   // SQLite has no store over a libsql client yet: pick one that keeps its
+ *   // own file, or keep sessions in memory while this is a single process.`,
+    ignore: ['*.db', '*.db-journal', '*.db-wal', '*.db-shm'],
+  },
+};
+
+/** Every engine, in the order \`init\` offers them. */
+export const ENGINE_CHOICES: { dialect: DialectName; label: string }[] = (
+  Object.keys(ENGINES) as DialectName[]
+).map((dialect) => ({ dialect, label: ENGINES[dialect].label }));
 
 export function createProject(options: InitOptions): Plan {
   const name = toKebab(options.name);
   if (!name) throw new CliError('A project needs a name: samble init <name>.');
 
   const modulesDir = options.modulesDir ?? 'src/modules';
+  const dialect = options.dialect ?? 'postgres';
+  const engine = ENGINES[dialect];
+  // Wrapped the way prettier wraps it: the project runs `prettier --check`,
+  // and prettier joins the call onto one line whenever it fits in 80.
+  const requiredCall = (names: string[]) => {
+    const list = `[${names.map((name) => `'${name}'`).join(', ')}]`;
+    const spread = `...(options.db ? [] : ${list})`;
+    const oneLine = `  ConfigService.require(['SESSION_SECRET', ${spread}]);`;
+    if (oneLine.length <= 80) return oneLine;
+    const item = `    ${spread},`;
+    const entry =
+      item.length <= 80
+        ? item
+        : `    ...(options.db\n      ? []\n      : ${list}),`;
+    return `  ConfigService.require([\n    'SESSION_SECRET',\n${entry}\n  ]);`;
+  };
+  const json = (deps: Record<string, string>) =>
+    Object.entries(deps)
+      .map(([pkg, range]) => `,\n    "${pkg}": "${range}"`)
+      .join('');
 
   const pkg = `{
   "name": "${name}",
@@ -47,11 +186,9 @@ export function createProject(options: InitOptions): Plan {
     "express": "^4.18.2",
     "express-session": "^1.18.1",
     "@samble/core": "${options.sambleVersion}",
-    "pg": "^8.11.2",
-    "reflect-metadata": "^0.1.13"
+    "reflect-metadata": "^0.1.13"${json(engine.driver)}
   },
   "devDependencies": {
-    "@electric-sql/pglite": "^0.5.8",
     "@eslint/js": "^10.0.1",
     "@jest/globals": "^30.5.2",
     "@types/express": "^4.17.21",
@@ -69,17 +206,24 @@ export function createProject(options: InitOptions): Plan {
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.70.1"
+    "typescript-eslint": "^8.70.1"${json(engine.testDeps)}
   },
   "jest": {
     "preset": "ts-jest",
     "testEnvironment": "node",
-    "roots": ["<rootDir>/test"],
-    "moduleNameMapper": { "^@/(.*)$": "<rootDir>/${modulesDir}/$1" },
+    "roots": [
+      "<rootDir>/test"
+    ],
+    "moduleNameMapper": {
+      "^@/(.*)$": "<rootDir>/${modulesDir}/$1"
+    },
     "testTimeout": 30000
   },
   "engines": {
     "node": ">=22.13"
+  },
+  "samble": {
+    "dialect": "${dialect}"
   }
 }
 `;
@@ -127,6 +271,7 @@ export function createProject(options: InitOptions): Plan {
 
   const index = `import { ConfigService, Samble, type Database } from '@samble/core';
 import auth from './config/auth';
+import './config/database';
 import buildSession from './config/session';
 
 /** What a caller may hand in instead of reading it from the environment. */
@@ -134,7 +279,7 @@ export interface AppOptions {
   /**
    * An open connection. A test passes \`await openTestDatabase()\` — a real
    * Postgres inside the process — and gets the same boot a deployment does.
-   * Left out, samble opens one from the DB_* variables.
+   * Left out, samble opens one from the environment.
    */
   db?: Database;
 }
@@ -149,23 +294,10 @@ export async function createApp(options: AppOptions = {}) {
   // FIRST, before a single value is read: it names EVERY variable that is
   // missing, instead of one per run. \`samble doctor\` reports the same list
   // without starting anything, which is what an install script should call.
-  ConfigService.require([
-    'SESSION_SECRET',
-    ...(options.db
-      ? []
-      : ['DB_HOST', 'DB_PORT', 'DB_USERNAME', 'DB_PASSWORD', 'DB_NAME']),
-  ]);
+${requiredCall(engine.required)}
 
   const app = await Samble.create({
-    db: options.db ?? {
-      host: ConfigService.get('DB_HOST'),
-      // \`number\` and not \`+get(...)\`: a value with a stray space or a
-      // comment on the line would reach the driver as NaN.
-      port: ConfigService.number('DB_PORT'),
-      user: ConfigService.get('DB_USERNAME'),
-      password: ConfigService.get('DB_PASSWORD'),
-      database: ConfigService.get('DB_NAME'),
-    },
+    db: options.db ?? ${engine.options},
 
     // \`samble module <name>\` registers it here.
     modules: [],
@@ -270,12 +402,7 @@ SESSION_SECRET=${sessionSecret}
 # with scheme and port. Empty means no browser may.
 CORS_ORIGIN=http://localhost:5173
 
-DB_HOST=localhost
-DB_PORT=5432
-DB_USERNAME=postgres
-DB_PASSWORD=
-DB_NAME=${name.replace(/-/g, '_')}
-`;
+${engine.env(name.replace(/-/g, '_'))}`;
 
   const ignore = `node_modules
 build
@@ -284,7 +411,7 @@ coverage
 logs
 *.log
 .eslintcache
-`;
+${engine.ignore.map((line) => `${line}\n`).join('')}`;
 
   // --- How a file is shaped, decided once -----------------------------------
   //
@@ -528,9 +655,9 @@ declare module 'express-session' {
  * lost on every restart, and a second process does not see the first one's.
  * When this has users, keep them in the database you already run: pick the
  * \`express-session\` store for YOUR engine and build it over the connection
- * samble opened, \`app.db.$client\`, so there is no second pool:
+ * samble opened, \`app.db.$client\`, so there is no second pool. In src/index.ts:
  *
- *   app.use(buildSession(new PgStore({ pool: app.db.$client as Pool })));
+${engine.sessionStore}
  *
  * samble installs no store on purpose: which one depends on the engine, and
  * that is your choice.
@@ -679,7 +806,9 @@ describe('the application', () => {
 
   beforeAll(async () => {
     process.env.SESSION_SECRET ??= 'test';
-    db = await openTestDatabase();
+    db = await openTestDatabase(${
+      dialect === 'postgres' ? '' : `{ dialect: '${dialect}' }`
+    });
     app = await createApp({ db });
     await app.start(0);
   });
@@ -694,6 +823,24 @@ describe('the application', () => {
     expect(res.status).toBe(200);
   });
 });
+`;
+
+  const databaseTypes = `/**
+ * Which database engine this application runs on, told to the compiler once.
+ *
+ * Drizzle's database type depends on the engine, so \`this.db\` is typed from
+ * this — in every endpoint, routine and migration. Change the engine and change
+ * it here, beside \`dialect\` in src/index.ts and in package.json.
+ */
+declare global {
+  namespace SambleDatabase {
+    interface Config {
+      dialect: '${dialect}';
+    }
+  }
+}
+
+export {};
 `;
 
   return plan(
@@ -711,6 +858,7 @@ describe('the application', () => {
       { path: '.env', content: env },
       { path: '.env.template', content: env.replace(/=.+$/gm, '=') },
       { path: 'src/index.ts', content: index },
+      { path: 'src/config/database.ts', content: databaseTypes },
       { path: 'src/config/permissions.ts', content: permissionTypes },
       { path: 'src/config/auth.ts', content: authFile },
       { path: 'src/config/session.ts', content: sessionFile },
@@ -719,7 +867,14 @@ describe('the application', () => {
     ],
     [],
     [
-      `Fill in .env (the database has to exist; samble creates tables, not databases).`,
+      dialect === 'sqlite'
+        ? `The database is a file (DB_URL in .env), created on the first run.`
+        : `Fill in .env (the database has to exist; samble creates tables, not databases).`,
+      ...(dialect === 'mysql'
+        ? [
+            `npm test needs a MySQL server (SAMBLE_TEST_MYSQL_URL in .env): each test creates a database of its own there and drops it.`,
+          ]
+        : []),
       `Once it runs: /health answers the probes, /docs has the API, and logs/ has the route map.`,
       `src/config/auth.ts lets EVERYONE through, so endpoints answer from the first request. Replace it before this has users.`,
       // Inside the project it is the local install that answers, so no
@@ -728,7 +883,11 @@ describe('the application', () => {
         modulesDir === 'src/modules' ? '' : ` --dir ${modulesDir}`
       }`,
       `Formatting is decided: .editorconfig for every editor, .prettierrc for Prettier, eslint.config.mjs for what the code means, .gitattributes so the tree is LF everywhere. npm run lint / npm run format.`,
-      `npm test boots the whole app on a Postgres inside the process (openTestDatabase): no server, no .env.`,
+      ...(dialect === 'mysql'
+        ? []
+        : [
+            `npm test boots the whole app on a ${engine.label} inside the process (openTestDatabase): no server, no .env.`,
+          ]),
       `Then: npm run dev`,
     ],
   );

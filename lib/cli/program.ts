@@ -4,7 +4,13 @@ import { Command } from 'commander';
 import { connect, loadApp } from './app-loader';
 import { runBuild } from './build';
 import { printDoctor, runDoctor } from './doctor';
-import { createProject, GitResult, initGit, install } from './init';
+import {
+  createProject,
+  ENGINE_CHOICES,
+  GitResult,
+  initGit,
+  install,
+} from './init';
 import {
   createEndpoint,
   createTable,
@@ -19,8 +25,9 @@ import { generateMigration, snapshotPath } from './migration-generator';
 import { CliError, parseTarget } from './names';
 import { Plan } from './plan';
 import type Samble from '../core/samble';
-import { emptySnapshot } from '../modules/schema-diff';
 import type { SchemaSnapshot } from '../modules/schema-diff';
+import type { DialectName } from '../modules/database';
+import { dialectNamed } from '../dialects';
 import { apply } from './writer';
 
 /**
@@ -68,16 +75,78 @@ function report(target: Plan, flags: CommonFlags): void {
 }
 
 /**
- * The snapshot a module last recorded, or the empty one.
+ * Which engine, asked on the terminal.
+ *
+ * The engine is the operator's choice, so `init` asks instead of assuming. With
+ * no terminal to ask on — a script, CI — it does not guess either: it takes
+ * Postgres and says so, and `--db` is how a script chooses.
+ */
+async function askDialect(): Promise<DialectName> {
+  if (!process.stdin.isTTY) {
+    console.log(
+      '  database postgres (no terminal to ask on; pass --db to choose)',
+    );
+    return 'postgres';
+  }
+
+  const readline = await import('readline/promises');
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+  try {
+    console.log('Which database will this project run on?');
+    ENGINE_CHOICES.forEach((choice, index) =>
+      console.log(`  ${index + 1}) ${choice.label}`),
+    );
+    for (;;) {
+      const answer = (await rl.question('Choose 1-3 [1]: ')).trim() || '1';
+      const chosen = ENGINE_CHOICES[Number(answer) - 1];
+      if (chosen) return chosen.dialect;
+      console.log(`  "${answer}" is not one of the options.`);
+    }
+  } finally {
+    rl.close();
+  }
+}
+
+/**
+ * The engine this project runs on, as `samble init` recorded it in
+ * `package.json` (`"samble": { "dialect": "mysql" }`).
+ *
+ * The generators stay pure — they take the dialect as an option — and this is
+ * the one place that reads it, for the two that write engine-specific code: a
+ * table and a migration. A project with no record is `postgres`, which is what
+ * every project was before the engine became a choice. An unknown value is an
+ * error, not a fallback: writing Postgres code into a MySQL project is worse
+ * than stopping.
+ */
+function projectDialect(): DialectName {
+  const file = path.join(process.cwd(), 'package.json');
+  if (!fs.existsSync(file)) return 'postgres';
+  const pkg = JSON.parse(fs.readFileSync(file, 'utf8')) as {
+    samble?: { dialect?: string };
+  };
+  const recorded = pkg.samble?.dialect;
+  return recorded ? dialectNamed(recorded).name : 'postgres';
+}
+
+/**
+ * The snapshot a module last recorded, or none.
  *
  * A module with no snapshot has never generated a migration, so its first diff
  * is against nothing — which is exactly what an empty snapshot says. A file that
  * is there but unreadable is an error, though: silently treating corruption as
  * "no history" would generate a migration that recreates every table.
  */
-function readSnapshot(modulesDir: string, moduleId: string): SchemaSnapshot {
+function readSnapshot(
+  modulesDir: string,
+  moduleId: string,
+): SchemaSnapshot | undefined {
   const file = path.join(process.cwd(), snapshotPath(modulesDir, moduleId));
-  if (!fs.existsSync(file)) return emptySnapshot();
+  // `undefined` and not an empty snapshot built here: which empty snapshot
+  // depends on the engine, and the application is the one that knows it.
+  if (!fs.existsSync(file)) return undefined;
 
   try {
     return JSON.parse(fs.readFileSync(file, 'utf8')) as SchemaSnapshot;
@@ -151,7 +220,14 @@ export function buildProgram(): Command {
     .option('--skip-install', 'write the files and stop')
     .option('--no-git', 'do not create a repository, or the first commit')
     .option('--dir <path>', 'where modules will live', 'src/modules')
-    .action((name: string | undefined, flags) => {
+    .option(
+      '--db <engine>',
+      `database engine: ${ENGINE_CHOICES.map((c) => c.dialect).join(', ')}`,
+    )
+    .action(async (name: string | undefined, flags) => {
+      const dialect = flags.db
+        ? dialectNamed(flags.db).name
+        : await askDialect();
       const project = name ?? path.basename(process.cwd());
       // With a name, the project is a NEW folder; without one, it is this one.
       const root = name ? path.resolve(process.cwd(), name) : process.cwd();
@@ -161,6 +237,7 @@ export function buildProgram(): Command {
           name: project,
           sambleVersion: `^${version()}`,
           modulesDir: flags.dir,
+          dialect,
         }),
         { root },
       );
@@ -339,6 +416,7 @@ export function buildProgram(): Command {
         modulesDir: flags.dir,
         from: flags.from,
         table: flags.name,
+        dialect: projectDialect(),
       }),
       flags,
     );
@@ -350,7 +428,12 @@ export function buildProgram(): Command {
       .description("A migration, added to the module's own ledger"),
   ).action((target, flags) => {
     report(
-      createMigration({ target, modulesDir: flags.dir, from: flags.from }),
+      createMigration({
+        target,
+        modulesDir: flags.dir,
+        from: flags.from,
+        dialect: projectDialect(),
+      }),
       flags,
     );
   });
@@ -392,7 +475,8 @@ export function buildProgram(): Command {
           generateMigration({
             target,
             diff,
-            snapshot: app.snapshotOf(moduleId, previous),
+            snapshot: await app.snapshotOf(moduleId, previous),
+            method: app.dialect.statementMethod,
             modulesDir: flags.dir,
           }),
           flags,

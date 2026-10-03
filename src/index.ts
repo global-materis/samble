@@ -2,6 +2,7 @@ import path from 'path';
 import { existsSync } from 'fs';
 import type { Pool } from 'pg';
 import { ConfigService, Samble } from '../lib';
+import './config/database';
 import enableSession from './config/enable-session';
 import sessionAuth from './config/session-auth';
 import identity from './modules/identity/module';
@@ -36,6 +37,9 @@ export async function createApp() {
 
   const app = await Samble.create({
     db: {
+      // The engine is the operator's choice; this demo runs on Postgres. Say
+      // it here, in config/database.ts (for the compiler) and nowhere else.
+      dialect: 'postgres',
       host: ConfigService.get('DB_HOST'),
       port: ConfigService.number('DB_PORT'),
       user: ConfigService.get('DB_USERNAME'),

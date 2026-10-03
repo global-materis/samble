@@ -70,11 +70,17 @@ export type { LoadedModule, LoadedStrategy } from './modules/module-loader';
 export { collectModuleTables } from './modules/collect-tables';
 export type {
   Database,
+  DatabaseOf,
   DatabaseOptions,
+  DialectName,
+  SelectedDialect,
   Transaction,
 } from './modules/database';
-export { rows, tableExists } from './modules/database';
+export { rows, run, tableExists } from './modules/database';
 export { openTestDatabase, closeTestDatabase } from './modules/test-database';
+export type { TestDatabaseOptions } from './modules/test-database';
+export { DIALECTS, DIALECT_NAMES, dialectOf } from './dialects';
+export type { Dialect } from './dialects';
 export { Container, ContractError } from './modules/container';
 export { token } from './modules/token';
 export type { TokenKind } from './modules/token';

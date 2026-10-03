@@ -1,12 +1,4 @@
-import { is } from 'drizzle-orm';
-import {
-  isPgEnum,
-  isPgMaterializedView,
-  isPgSchema,
-  isPgSequence,
-  isPgView,
-  PgTable,
-} from 'drizzle-orm/pg-core';
+import { dialectOfSchemaObject } from '../dialects';
 import {
   MODULE_LAYOUT,
   ModuleDefinitionError,
@@ -91,24 +83,21 @@ const globsFor = (
 };
 
 /**
- * Whether an export belongs in the database schema.
+ * Whether an export belongs in the database schema, of ANY engine.
  *
- * Six kinds, not one. A `pgTable` is the obvious case, but an ENUM has to be
- * collected too: a table with an enum column emits DDL that REFERENCES the
- * type, so a schema without the enum generates a migration that fails when it
- * runs. Views, sequences and schemas are here for the same reason.
+ * The manifest is imported before anyone knows which engine the application
+ * runs on, so it collects every engine's schema objects and `Samble.create()`
+ * refuses, by name, one that does not match. What counts per engine is the
+ * dialect's call: on Postgres an ENUM has to be collected too — a table with an
+ * enum column emits DDL that REFERENCES the type, so a schema without it
+ * generates a migration that fails when it runs.
  *
  * Everything else exported from the same folder — a TypeScript type, a row
  * type, a helper, a DTO — is ignored, which is what lets a table file also
  * export the things that go with it.
  */
 const isTable = (value: unknown): value is ModuleTable =>
-  is(value, PgTable) ||
-  isPgEnum(value) ||
-  isPgSequence(value) ||
-  isPgView(value) ||
-  isPgMaterializedView(value) ||
-  isPgSchema(value);
+  dialectOfSchemaObject(value) !== null;
 
 /**
  * A migration class.

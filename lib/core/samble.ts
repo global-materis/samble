@@ -44,7 +44,9 @@ import {
   SchemaSnapshot,
   tableOwners,
 } from '../modules/schema-diff';
-import { Database, DatabaseOptions } from '../modules/database';
+import { Database, DatabaseOptions, run } from '../modules/database';
+import { dialectOf, dialectOfSchemaObject, type Dialect } from '../dialects';
+import { ModuleDefinitionError } from '../modules/module-manifest';
 import {
   closeClient,
   isDatabase,
@@ -177,6 +179,25 @@ const count = (total: number, noun: string): string =>
  * This framework allows you to configure API and routine patterns based on
  * modules, resolving their routes and dynamically loading what they declare.
  */
+/**
+ * Refuses, at boot and by name, a module whose tables were written for another
+ * engine — a `pgTable` in an application on MySQL. Left alone it would fail at
+ * the module's first query, with an error that names neither the module nor
+ * the engine.
+ */
+function assertModulesMatch(dialect: Dialect, modules: ResolvedModule[]) {
+  for (const mod of modules) {
+    for (const table of mod.tables) {
+      if (dialect.isSchemaObject(table)) continue;
+      const other = dialectOfSchemaObject(table)?.name ?? 'another engine';
+      throw new ModuleDefinitionError(
+        `Module "${mod.id}" declares tables for ${other}, and this application runs on ${dialect.name}. A module's tables are written for the engine the application runs on.`,
+        mod.id,
+      );
+    }
+  }
+}
+
 export default class Samble extends Server {
   private modules: ResolvedModule[] = [];
   private moduleBasePath = '/api';
@@ -259,7 +280,14 @@ export default class Samble extends Server {
     private readonly ownsConnection: boolean,
   ) {
     super();
+    this.dialect = dialectOf(dbSource);
   }
+
+  /**
+   * The engine this application runs on, read off its connection: options
+   * carry `dialect`, and a connection handed in already is one.
+   */
+  public readonly dialect: Dialect;
 
   /**
    * Builds an application from its modules, owning the DataSource.
@@ -277,7 +305,7 @@ export default class Samble extends Server {
    *
    * @example
    * const app = await Samble.create({
-   *   db: { type: 'postgres', host, database },
+   *   db: { dialect: 'postgres', host, database },
    *   modules: [identity, billing],
    *   version: '3.0.0',
    * });
@@ -299,6 +327,7 @@ export default class Samble extends Server {
     }
 
     const app = new Samble(database, ownsConnection);
+    assertModulesMatch(app.dialect, modules);
 
     // Before anything else, so a failure during boot is still visible through
     // it. Always, not only when `logs` is passed: the files are the default,
@@ -499,7 +528,7 @@ export default class Samble extends Server {
     // having: the first real query is when a wrong host or password shows up.
     // Asking for one here is what keeps that error at the point where the
     // caller asked to connect, instead of inside their first request.
-    await this.dbSource.execute(sql`select 1`);
+    await run(this.dbSource, sql`select 1`);
   };
 
   /**
@@ -556,9 +585,13 @@ export default class Samble extends Server {
    */
   public pendingSchema = async (
     moduleId: string,
-    previous: SchemaSnapshot = emptySnapshot(),
+    previous?: SchemaSnapshot,
   ): Promise<SchemaDiff> =>
-    diffSnapshots(previous, moduleSnapshot(this.moduleOrFail(moduleId)));
+    diffSnapshots(
+      this.dialect,
+      previous ?? (await emptySnapshot(this.dialect)),
+      await moduleSnapshot(this.dialect, this.moduleOrFail(moduleId)),
+    );
 
   /**
    * What one module's tables describe right now, to store beside the migration
@@ -570,7 +603,8 @@ export default class Samble extends Server {
   public snapshotOf = (
     moduleId: string,
     previous?: SchemaSnapshot,
-  ): SchemaSnapshot => moduleSnapshot(this.moduleOrFail(moduleId), previous);
+  ): Promise<SchemaSnapshot> =>
+    moduleSnapshot(this.dialect, this.moduleOrFail(moduleId), previous);
 
   /**
    * What the LIVE database is missing to match every module's tables.
@@ -583,7 +617,7 @@ export default class Samble extends Server {
    */
   public schemaDrift = async (): Promise<string[]> => {
     await this.connect();
-    return liveDrift(this.dbSource, this.modules);
+    return liveDrift(this.dialect, this.dbSource, this.modules);
   };
 
   private moduleOrFail = (moduleId: string): ResolvedModule => {

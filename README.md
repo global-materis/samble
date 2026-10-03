@@ -38,8 +38,13 @@ Into a project you already have:
 
 ```bash
 npm i @samble/core@alpha
-npm i drizzle-orm express class-validator reflect-metadata pg
+npm i drizzle-orm express class-validator reflect-metadata
+npm i pg            # or mysql2, or @libsql/client: the driver of YOUR engine
 ```
+
+It runs on **PostgreSQL, MySQL/MariaDB or SQLite**. The engine is the
+operator's choice: `samble init` asks, and only that engine's driver is
+installed.
 
 ## The application
 
@@ -48,7 +53,7 @@ import { ConfigService, Samble } from '@samble/core';
 import billing from './modules/billing/module';
 
 const app = await Samble.create({
-  db: { type: 'postgres', host: ConfigService.get('DB_HOST'), synchronize: false },
+  db: { dialect: 'postgres', host: ConfigService.get('DB_HOST'), database: 'app' },
   modules: [billing],   // the only way to mount anything
   version: '1.0.0',     // this app's own version; /health reports it
   basePath: '/api',

@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
-import { Database, rows, tableExists, Transaction } from './database';
+import { dialectOf } from '../dialects';
+import { Database, rows, run, tableExists, Transaction } from './database';
 import { ResolvedModule } from './module-manifest';
 
 /**
@@ -109,17 +110,9 @@ export class ModuleMigrator {
    * migration — it is the ledger those migrations are recorded in.
    */
   async ensureTable(): Promise<void> {
-    // `"ranAt"` stays quoted and camelCased: an installation that already has
-    // this table got it under that name, and renaming a column samble never
-    // reads would be churn with a migration attached.
-    await this.db.execute(sql`
-      create table if not exists _module_migrations (
-        module varchar(100) not null,
-        name varchar(255) not null,
-        "ranAt" timestamp with time zone not null default now(),
-        primary key (module, name)
-      )
-    `);
+    for (const statement of dialectOf(this.db).migrationsTable) {
+      await run(this.db, statement);
+    }
   }
 
   /**
@@ -197,10 +190,13 @@ export class ModuleMigrator {
         // Recorded in the same transaction: a migration that ran without
         // leaving its row would run again on the next boot, over data it
         // already changed.
-        await tx.execute(sql`
-          insert into _module_migrations (module, name)
-          values (${moduleId}, ${migration.name})
-        `);
+        await run(
+          tx as Transaction,
+          sql`
+            insert into _module_migrations (module, name)
+            values (${moduleId}, ${migration.name})
+          `,
+        );
       });
     } catch (error) {
       throw new ModuleMigrationError(

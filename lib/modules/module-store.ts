@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
-import { Database, rows } from './database';
+import { dialectOf } from '../dialects';
+import { Database, rows, run } from './database';
 import { ResolvedModule } from './module-manifest';
 import {
   ModuleState,
@@ -32,21 +33,11 @@ export class ModuleStore {
    * a round trip to ask.
    */
   async ensureTable(): Promise<void> {
-    await this.db.execute(sql`
-      create table if not exists _modules (
-        id varchar(100) primary key,
-        installed_at timestamp with time zone not null default now(),
-        updated_at timestamp with time zone not null default now()
-      )
-    `);
-
-    // An installation created before this version has a `version` column that
-    // is `not null` with no default, so leaving it would make the insert of the
-    // next module fail — and the failure would arrive on a deploy, not on the
-    // upgrade. Idempotent, and a no-op on a table that was just created.
-    await this.db.execute(
-      sql`alter table _modules drop column if exists version`,
-    );
+    // The DDL is the dialect's: column types differ per engine. On Postgres it
+    // also drops the old `version` column — see `dialects/postgres.ts`.
+    for (const statement of dialectOf(this.db).modulesTable) {
+      await run(this.db, statement);
+    }
   }
 
   async list(): Promise<ModuleState[]> {
@@ -66,7 +57,7 @@ export class ModuleStore {
 
     await this.db.transaction(async (tx) => {
       for (const entry of result.install) {
-        await tx.execute(sql`insert into _modules (id) values (${entry.id})`);
+        await run(tx, sql`insert into _modules (id) values (${entry.id})`);
       }
     });
 
@@ -78,6 +69,6 @@ export class ModuleStore {
    * is what makes reinstalling it a safe operation.
    */
   async forget(id: string): Promise<void> {
-    await this.db.execute(sql`delete from _modules where id = ${id}`);
+    await run(this.db, sql`delete from _modules where id = ${id}`);
   }
 }

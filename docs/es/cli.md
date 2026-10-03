@@ -134,6 +134,7 @@ npx @samble/core@alpha init my-app --no-git        # sin repositorio ni primer c
 | `--skip-install` | escribe los archivos y para |
 | `--no-git` | no crea el repositorio, ni el primer commit |
 | `--dir <path>` | dónde van a vivir los módulos (por defecto `src/modules`) |
+| `--db <motor>` | `postgres`, `mysql` o `sqlite`, en vez de preguntar |
 
 Escribe:
 
@@ -151,12 +152,21 @@ src/index.ts          createApp() separado de main()
 src/config/permissions.ts
 src/config/auth.ts
 src/config/session.ts sesión por cookie, y qué lleva adentro
-test/app.spec.ts      la app entera, arrancada sobre un Postgres en proceso
+src/config/database.ts qué motor, dicho al compilador (tipa this.db)
+test/app.spec.ts      la app entera, sobre una base de pruebas de su motor
 test/tsconfig.json    para que el editor y el linter vean las pruebas
 ```
 
 Tres cosas de ahí conviene conocerlas, porque equivocarse en cualquiera cuesta
 una tarde.
+
+**Pregunta qué base de datos.** PostgreSQL, MySQL / MariaDB o SQLite — lo
+elige el operador. `--db <motor>` la contesta de antemano, para un script o CI;
+sin terminal donde preguntar y sin `--db`, toma Postgres y lo dice. La respuesta
+decide el driver que se instala (y ningún otro), el `.env`, la base de pruebas,
+la plantilla de tablas y el store de sesiones sugerido, y queda anotada en el
+`package.json` (`"samble": { "dialect": ... }`) para los generadores. Mirá
+[Bases de datos](./guide.md#bases-de-datos).
 
 **Las banderas de decoradores.** `experimentalDecorators` y
 `emitDecoratorMetadata`. Sacá cualquiera de las dos y cada ruta y cada entidad
@@ -195,9 +205,10 @@ no existe hasta que el paquete **y** sus tipos están instalados.
 > [Sesiones](./guide.md#sesiones).
 
 **Y trae una prueba que arranca la aplicación.** `test/app.spec.ts` llama al
-mismo `createApp()` que corre un despliegue, pasándole `openTestDatabase()` — un
-Postgres de verdad dentro del proceso (PGlite) — así que `npm test` no necesita
-servidor ni `.env`. La configuración de jest va en el `package.json`, y
+mismo `createApp()` que corre un despliegue, pasándole `openTestDatabase()` — una
+base de verdad del motor del proyecto: PGlite para Postgres y memoria para
+SQLite, así que `npm test` no necesita servidor ni `.env`; MySQL no tiene opción
+dentro del proceso, así que ahí necesita `SAMBLE_TEST_MYSQL_URL`. La configuración de jest va en el `package.json`, y
 `test/tsconfig.json` deja que el editor y las reglas de lint con tipos lean las
 pruebas mientras el `tsconfig.json` raíz conserva `rootDir: src` para el build.
 Mirá [Pruebas](./guide.md#pruebas).
@@ -561,7 +572,7 @@ npx samble migration:generate billing/add-due-date --print
 | `--entry <file>` | archivo que exporta `createApp()` |
 | `--dir <path>` | dónde viven los módulos (por defecto `src/modules`) |
 | `--print` | muestra el SQL y no escribe nada |
-| `--check` | además dice qué le falta a la base viva |
+| `--check` | además dice qué le falta a la base viva (sólo Postgres, por ahora) |
 | `--force` | sobrescribe un archivo que ya existe |
 
 **No se conecta a la base**, pero sí construye la aplicación con `createApp()`

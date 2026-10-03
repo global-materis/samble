@@ -49,5 +49,12 @@
   "include": ["./src", "./lib", "./test", "jest.config.ts"],
   // Projects the CLI scaffolds during the tests: written by the generators,
   // resolved against their own node_modules, and not ours to compile.
-  "exclude": ["node_modules", "dist", "types", "build", "test/.generated"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    "types",
+    "build",
+    "test/.generated",
+    "test/.generated-dialects"
+  ]
 }

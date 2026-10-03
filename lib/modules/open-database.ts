@@ -1,3 +1,4 @@
+import { detectDialect, dialectNamed } from '../dialects';
 import { Database, DatabaseOptions } from './database';
 import { collectModuleTables } from './collect-tables';
 import type { ResolvedModule } from './module-manifest';
@@ -5,48 +6,36 @@ import type { ResolvedModule } from './module-manifest';
 /**
  * Tells a live connection from the options to open one.
  *
- * Structural, not `instanceof`: the instance may come from any of Drizzle's
- * drivers, and an application that built one over `pg` and one over PGlite
- * would fail an identity check against whichever class samble happened to name.
- * `execute` and `transaction` are what samble actually uses.
+ * By asking the dialects, not by `instanceof`: Drizzle's `is()` compares an
+ * entity kind, so it holds when the application and samble resolve different
+ * copies of `drizzle-orm`, and it recognizes a connection built over any driver
+ * of an engine samble runs on — `pg`, PGlite, `mysql2`, libsql.
  */
 export function isDatabase(
   value: DatabaseOptions | Database,
 ): value is Database {
-  const candidate = value as Partial<Database>;
-  return (
-    typeof candidate.execute === 'function' &&
-    typeof candidate.transaction === 'function'
-  );
+  return detectDialect(value) !== null;
 }
 
 /**
  * Opens the connection samble owns, with every module's tables in its schema.
  *
- * `drizzle-orm/node-postgres` is required HERE and not imported at the top,
- * because requiring it pulls in `pg`. An application that hands samble a
- * connection of its own — PGlite in a test suite, a serverless driver, a socket
- * — never reaches this function, and must not be made to install a driver it
- * does not use.
+ * The dialect requires its driver HERE and not at import time: an application
+ * installs the driver of the engine it runs and no other, and one that hands
+ * samble a connection of its own never reaches this function at all.
  *
  * The schema is passed even though samble's own type erases it: Drizzle needs it
- * to resolve a table reference back to a name, and `pushSchema` reads it to
+ * to resolve a table reference back to a name, and the schema diff reads it to
  * work out what the database is missing.
  */
 export function openDatabase(
   options: DatabaseOptions,
   modules: ResolvedModule[],
 ): Database {
-  /* eslint-disable-next-line @typescript-eslint/no-require-imports --
-     Lazy on purpose: see above. */
-  const { drizzle } = require('drizzle-orm/node-postgres') as {
-    drizzle: (config: Record<string, unknown>) => Database;
-  };
-
-  return drizzle({
-    connection: options,
-    schema: collectModuleTables(modules),
-  });
+  return dialectNamed(options.dialect ?? 'postgres').open(
+    options,
+    collectModuleTables(modules),
+  );
 }
 
 /**

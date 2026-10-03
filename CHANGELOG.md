@@ -8,13 +8,28 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The database engine is the operator's choice**: PostgreSQL, MySQL/MariaDB
+  or SQLite (libsql), through one adapter per engine in `lib/dialects/`. Only
+  the driver of the engine in use is loaded: `pg`, `mysql2` or
+  `@libsql/client`. `db: { dialect }` in `Samble.create()`; a connection handed
+  in is recognized by itself (`app.dialect`).
+- `this.db` is typed by the engine through `SambleDatabase.Config`, which
+  `samble init` declares in `src/config/database.ts`.
+- `samble init` asks which database (or `--db <engine>`) and writes the driver,
+  `.env`, test database, table template and session store suggestion for it,
+  recording the choice in `package.json` (`samble.dialect`). `samble table` and
+  `samble migration` follow it.
+- A module whose tables were written for another engine is refused at boot, by
+  name.
+
 - `app.db`: the connection samble opened or was handed, for what the
   application plugs in beside it — an `express-session` store over the same
   pool (`app.db.$client`) instead of a second one. samble installs no store:
   which one depends on the engine, and the engine is the application's choice.
-- `openTestDatabase()` / `closeTestDatabase()`: a real Postgres inside the
-  process (PGlite) to boot an application in a test. `@electric-sql/pglite` is
-  an optional peer.
+- `openTestDatabase({ dialect })` / `closeTestDatabase()`: a real database of
+  the app's engine to boot it in a test — PGlite, SQLite in memory, or a
+  database of its own on the MySQL server `SAMBLE_TEST_MYSQL_URL` points at,
+  dropped on close.
 - `samble init` writes a test that boots the whole app (`test/app.spec.ts`),
   `test/tsconfig.json`, the jest configuration in `package.json` and the `test`
   script with its dev dependencies.
@@ -27,6 +42,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   building one over `app.db.$client`.
 
 ### Fixed
+
+- `schemaDrift()` / `migration:generate --check` compared the WHOLE database:
+  it reported samble's `_modules` as drift and, on `_module_migrations` or any
+  table it did not know, Drizzle Kit stopped to ask and called
+  `process.exit(1)`. It is now limited to the modules' tables (Postgres), and a
+  Drizzle Kit exit becomes an error. On MySQL and SQLite it is refused with a
+  clear message until Drizzle Kit can be limited the same way.
+- The README and the guide still showed TypeORM options (`type: 'postgres'`,
+  `synchronize`) for `db`.
+- The scaffold's `package.json` was not what Prettier writes; a project made
+  with `--skip-install` failed `prettier --check`.
 
 - The scaffold read `CORS_ORIGIN` with `ConfigService.get()`, which throws when
   it is missing; it now uses `optional()`.

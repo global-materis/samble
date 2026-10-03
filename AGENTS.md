@@ -44,8 +44,8 @@ is **not** an application. Dual layout:
   Spanish page across in the same commit. Code, identifiers and the framework's
   own JSDoc stay English on both sides; only the prose is translated.
 
-- **`docs/*/api.md` lists what an APPLICATION writes** — 99 of the 152 exports.
-  The other 53 are the module registry, the migrator, the loaders and the
+- **`docs/*/api.md` lists what an APPLICATION writes** — 101 of the 161 exports.
+  The other 60 are the module registry, the migrator, the loaders and the
   decorators' metadata: public because the CLI is a separate process, and left
   out on purpose so the page is a working reference and not a dump. It is also
   the one doc that can go stale silently, since adding a name to `lib/index.ts`
@@ -79,10 +79,12 @@ loader, and zero routes mount.
 ## Commands
 
 ```bash
-npm run dev     # nodemon → ts-node ./src/index.ts (needs PostgreSQL)
+npm run dev     # nodemon → ts-node ./src/index.ts (the demo runs on PostgreSQL)
 npm run build   # clears dist/ + types/, then tsc -p tsconfig.build.json
 npm run clear   # rimraf ./dist ./types
 npm test        # jest, with --experimental-vm-modules (PGlite needs it)
+                # SAMBLE_TEST_MYSQL_URL=mysql://root@localhost:3306 npm test
+                # also runs the MySQL column of test/dialects.spec.ts
 npm run lint    # eslint . --ext .ts  (formatting included, see below)
 npm run lint:fix
 npm run format  # prettier --write .  (json, css, html too)
@@ -427,6 +429,63 @@ Keep that split — the decision is the part worth testing.
   install the `.tgz`. A tarball is closer to what npm installs than `npm link`,
   which resolves through symlinks and hides a bad `files` entry.
 
+## Dialects (`lib/dialects/`)
+
+Decided 2026-10-02, the author's call: **the database engine is the operator's
+choice**, and nobody installs a driver for an engine they do not run. One
+`Dialect` per engine (`postgres.ts`, `mysql.ts`, `sqlite.ts`) implements
+everything that differs: opening the connection, recognizing schema objects,
+running a statement and reading rows, `tableExists`, the DDL of `_modules` and
+`_module_migrations`, Drizzle Kit's schema functions, the statement method of a
+migration and the test database.
+
+Rules that are easy to break, so do not:
+
+- **Nothing outside `lib/dialects/` branches on the engine's name.** If a new
+  engine needs something the interface does not say, the interface grows. The
+  only exceptions are the CLI templates (`init`, the table and migration
+  generators), which WRITE engine-specific code and are data-driven
+  (`ENGINES`, `TABLE_SHAPES`) for that reason.
+- **The dialect is read off the connection** (`dialectOf(db)`, Drizzle's `is()`
+  on the database class), never stored beside it. Options carry `dialect`; a
+  connection handed in already IS one. `is()` compares entity kinds, so it holds
+  across copies of `drizzle-orm`.
+- **Drivers are required lazily** (`requireDriver`), checked by NAME first so
+  the error says `npm install mysql2` instead of a stack from inside Drizzle.
+- **`this.db` is typed by a global declaration**, `SambleDatabase.Config`, for
+  the same reason `SambleAuth` is global: an exported interface cannot be merged
+  from outside. `Transaction = DatabaseOf[SelectedDialect]`; empty means
+  Postgres. Inside this repo it is Postgres, so code here that touches a MySQL
+  or SQLite connection goes through the dialect, never through `db.execute`.
+- **`define-module` collects schema objects of EVERY engine** — it runs before
+  anyone knows the engine — and `Samble.create()` refuses a mismatch by module
+  and engine name (`assertModulesMatch`).
+- **SQLite is libsql, not better-sqlite3**: Drizzle's better-sqlite3 transactions
+  are synchronous and every samble transaction awaits. Its test database is
+  `:memory:` — measured: libsql shares it with its transactions, and a temp
+  FILE cannot be deleted on Windows because libsql keeps it locked after
+  `close()`.
+- **MySQL tests need a server.** `openTest` creates `samble_test_<random>` on
+  `SAMBLE_TEST_MYSQL_URL` and drops it on close; it never touches anything else
+  there. MySQL DDL commits implicitly, so a migration is not atomic there — said
+  in the guide, not hidden.
+- **MariaDB refuses `serial AUTO_INCREMENT`**, which is how Drizzle Kit writes a
+  MySQL `serial()`. Templates and fixtures use `int().autoincrement()`.
+- **Live drift is Postgres-only.** `pushSchema` takes a `tablesFilter` there and
+  samble passes the modules' tables — WITHOUT it, Drizzle Kit compared the whole
+  database, reported `_modules` as drift, and on `_module_migrations` (composite
+  key) or any unknown table stopped to ask "renamed?" and called
+  `process.exit(1)` with no terminal. That was a latent bug on Postgres too,
+  found by `dialects.spec.ts`. MySQL/SQLite push takes no filter, so `drift`
+  throws a clear error there. `withoutExit` turns any Drizzle Kit exit into an
+  error: a library must not end the process.
+
+`test/dialects.spec.ts` takes the same module through every engine — tables,
+a GENERATED migration, migrate, routes, a rolled-back transaction, drift — and
+uses its own folder (`test/.generated-dialects`): `cli.spec.ts` empties
+`test/.generated` on start, and the two run in parallel workers. That race made
+the suite flaky until it moved.
+
 ## Sessions are the application's; tests are samble's
 
 **Sessions.** Putting them in a database used to mean a store package that
@@ -452,8 +511,7 @@ after jest had torn the environment down. `samble init` writes
 `test/app.spec.ts`, `test/tsconfig.json` (so the type-aware lint reads tests
 while the root keeps `rootDir: src`) and the jest config INSIDE `package.json` —
 a `jest.config.ts` at the root belongs to no tsconfig and the linter refuses it.
-PGlite is Postgres, like the rest of samble today; it follows whatever the
-dialect design decides.
+Per engine since the dialects: PGlite, SQLite in memory, or a MySQL server.
 
 `test/cli.spec.ts` boots the generated `createApp({ db })` on
 `openTestDatabase()` with NO `.env`. That test is what caught the scaffold
@@ -558,9 +616,9 @@ What it costs:
    `createTable(new Table(...))`, `addColumn`. Migrations become SQL, which is
    arguably what they always were, but it IS a loss for anyone who used them.
 
-4. **Samble becomes Postgres-only in its types.** Table detection keys on
-   `PgTable`. In practice it already was — PGlite in tests, `type: 'postgres'`,
-   `$1` placeholders — but the types stop pretending otherwise.
+4. ~~Samble becomes Postgres-only in its types.~~ **Reversed 2026-10-02**: the
+   engine is the operator's choice, and samble runs on Postgres, MySQL/MariaDB
+   and SQLite through `lib/dialects/`. See *Dialects* below.
 
 5. **`hasDataLoss` cannot be trusted.** Measured: dropping a column with data
    reported `hasDataLoss: false` and zero warnings. No samble decision leans on

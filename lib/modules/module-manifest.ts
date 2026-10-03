@@ -1,3 +1,4 @@
+import type { MySqlTable, MySqlView } from 'drizzle-orm/mysql-core';
 import type {
   PgEnum,
   PgMaterializedView,
@@ -6,12 +7,14 @@ import type {
   PgTable,
   PgView,
 } from 'drizzle-orm/pg-core';
+import type { SQLiteTable, SQLiteView } from 'drizzle-orm/sqlite-core';
 import type { Contract } from './container';
 
 /**
  * Something a module puts in the database schema.
  *
- * Usually a `pgTable`. An ENUM has to be in this list too, and that is not a
+ * Usually a table — `pgTable`, `mysqlTable` or `sqliteTable`, all of one
+ * module's in the engine the application runs on. On Postgres an ENUM has to be in this list too, and that is not a
  * detail: a table with an enum column generates
  * `"status" "order_status" NOT NULL` referencing a type that nothing creates,
  * so leaving the enum out produces a migration that fails when it runs. Views,
@@ -27,7 +30,11 @@ export type ModuleTable =
   | PgSequence
   | PgView
   | PgMaterializedView
-  | PgSchema;
+  | PgSchema
+  | MySqlTable
+  | MySqlView
+  | SQLiteTable
+  | SQLiteView;
 
 /**
  * Migrations contributed by a module. Either an array of migration classes or

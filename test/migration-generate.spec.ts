@@ -13,13 +13,9 @@ import {
 import { sql } from 'drizzle-orm';
 import { integer, pgTable, serial, text } from 'drizzle-orm/pg-core';
 import { ModuleMigrator } from '../lib/modules/module-migrator';
-import {
-  diffSnapshots,
-  emptySnapshot,
-  liveDrift,
-  moduleSnapshot,
-  tableOwners,
-} from '../lib/modules/schema-diff';
+import * as schemaDiff from '../lib/modules/schema-diff';
+import { tableOwners, type SchemaSnapshot } from '../lib/modules/schema-diff';
+import { postgres } from '../lib/dialects/postgres';
 import {
   generateMigration,
   snapshotPath,
@@ -27,6 +23,18 @@ import {
 import { createMigration } from '../lib/cli/generators';
 import { apply } from '../lib/cli/writer';
 import type { ResolvedModule } from '../lib/modules/module-manifest';
+
+// This suite runs on Postgres (PGlite); the other engines are in
+// dialects.spec.ts. The wrappers bind the dialect and accept a snapshot still
+// being computed, so each case reads like the question it asks.
+type Snap = SchemaSnapshot | Promise<SchemaSnapshot>;
+const emptySnapshot = () => schemaDiff.emptySnapshot(postgres);
+const moduleSnapshot = async (mod: ResolvedModule, previous?: Snap) =>
+  schemaDiff.moduleSnapshot(postgres, mod, await previous);
+const diffSnapshots = async (previous: Snap, current: Snap) =>
+  schemaDiff.diffSnapshots(postgres, await previous, await current);
+const liveDrift = (db: Database, modules: ResolvedModule[]) =>
+  schemaDiff.liveDrift(postgres, db, modules);
 import {
   closeTestDb,
   createTestDb,
@@ -122,7 +130,7 @@ describe('migration:generate', () => {
     const { files } = generateMigration({
       target: 'users/create-users',
       diff,
-      snapshot: moduleSnapshot(users),
+      snapshot: await moduleSnapshot(users),
       now: 1789779741336,
     });
 
@@ -160,7 +168,7 @@ describe('migration:generate', () => {
       const primera = generateMigration({
         target: 'users/create-users',
         diff: await diffSnapshots(emptySnapshot(), moduleSnapshot(users)),
-        snapshot: moduleSnapshot(users),
+        snapshot: await moduleSnapshot(users),
         now: 1,
       });
       apply(primera, { root: raiz });
@@ -176,7 +184,7 @@ describe('migration:generate', () => {
       const segunda = generateMigration({
         target: 'users/add-note',
         diff: await diffSnapshots(antes, despues),
-        snapshot: despues,
+        snapshot: await despues,
         now: 2,
       });
 
@@ -211,7 +219,7 @@ describe('migration:generate', () => {
   });
 
   it('se niega cuando no hay cambios, en vez de escribir una vacía', async () => {
-    const snap = moduleSnapshot(users);
+    const snap = await moduleSnapshot(users);
     const diff = await diffSnapshots(snap, snap);
 
     expect(() =>
@@ -219,7 +227,8 @@ describe('migration:generate', () => {
     ).toThrow(/Nothing to generate: "users" has no changes/);
   });
 
-  it('la migración generada entra en el ancho de prettier', () => {
+  it('la migración generada entra en el ancho de prettier', async () => {
+    const vacio = await emptySnapshot();
     // Tercera vez que aparece esta regla —después del import y del token— y por
     // la misma razón: el proyecto que `samble init` arma corre
     // `prettier --check`, así que un archivo generado una columna más ancho le
@@ -229,7 +238,7 @@ describe('migration:generate', () => {
       generateMigration({
         target: 'users/x',
         diff: { up: [query], down: [] },
-        snapshot: emptySnapshot(),
+        snapshot: vacio,
         now: 1,
       }).files[0].content;
 
@@ -262,7 +271,7 @@ describe('migration:generate', () => {
     }
   });
 
-  it('sin vuelta atrás no escribe un down() vacío', () => {
+  it('sin vuelta atrás no escribe un down() vacío', async () => {
     // Un `down()` vacío afirma que esto se deshace no haciendo nada, que es una
     // cosa distinta de "la vuelta no está escrita". `Migration.down` es opcional
     // justamente para poder decir la diferencia — y de paso no deja un
@@ -271,7 +280,7 @@ describe('migration:generate', () => {
     const { files, hints } = generateMigration({
       target: 'users/x',
       diff: { up: ['DROP TABLE "x";'], down: [] },
-      snapshot: emptySnapshot(),
+      snapshot: await emptySnapshot(),
       now: 1,
     });
 
@@ -279,13 +288,13 @@ describe('migration:generate', () => {
     expect(hints.join(' ')).toMatch(/It has no down\(\)/);
   });
 
-  it('no rompe el literal cuando el SQL trae backticks', () => {
+  it('no rompe el literal cuando el SQL trae backticks', async () => {
     const diff = { up: ['SELECT `raro`, "${x}"'], down: [] };
 
     const [archivo] = generateMigration({
       target: 'users/raro',
       diff,
-      snapshot: emptySnapshot(),
+      snapshot: await emptySnapshot(),
       now: 1,
     }).files;
 
