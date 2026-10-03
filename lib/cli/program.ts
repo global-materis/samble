@@ -42,7 +42,7 @@ const version = (): string => {
     const candidate = path.join(dir, 'package.json');
     if (fs.existsSync(candidate)) {
       const pkg = JSON.parse(fs.readFileSync(candidate, 'utf8'));
-      if (pkg.name === 'samble') return pkg.version;
+      if (pkg.name === '@samble/core') return pkg.version;
     }
     dir = path.dirname(dir);
   }
@@ -190,7 +190,7 @@ export function buildProgram(): Command {
       .option(
         '--from <specifier>',
         'what the generated code imports samble from',
-        'samble',
+        '@samble/core',
       )
       .option('--force', 'overwrite files that already exist');
 

@@ -142,7 +142,7 @@ fallos; pedirle las dos cosas es un contrato escrito al revés.
 
 ```typescript
 // billing/tokens/billing-service.token.ts
-import { token } from 'samble';
+import { token } from '@samble/core';
 
 export interface BillingService {
   issueCharge(input: IssueChargeInput): Promise<Charge>;
@@ -488,7 +488,7 @@ token que va en el decorador:
 
 ```typescript
 // reports/strategies/low-stock-badge.strategy.ts
-import { Fills, Strategy } from 'samble';
+import { Fills, Strategy } from '@samble/core';
 import {
   ProductBadge,
   ProductBadges,

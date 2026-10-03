@@ -45,7 +45,7 @@ export function createProject(options: InitOptions): Plan {
     "drizzle-orm": "^0.45.3",
     "express": "^4.18.2",
     "express-session": "^1.18.1",
-    "samble": "${options.sambleVersion}",
+    "@samble/core": "${options.sambleVersion}",
     "pg": "^8.11.2",
     "reflect-metadata": "^0.1.13"
   },
@@ -111,7 +111,7 @@ export function createProject(options: InitOptions): Plan {
 }
 `;
 
-  const index = `import { ConfigService, Samble } from 'samble';
+  const index = `import { ConfigService, Samble } from '@samble/core';
 import auth from './config/auth';
 import buildSession from './config/session';
 
@@ -442,7 +442,7 @@ export default defineConfig([
 }
 `;
 
-  const permissionTypes = `import type { PermissionsOf } from 'samble';
+  const permissionTypes = `import type { PermissionsOf } from '@samble/core';
 
 /**
  * Every permission key the installed modules declare, taught to the compiler.
@@ -476,7 +476,7 @@ declare global {
 `;
 
   const sessionFile = `import session from 'express-session';
-import { ConfigService } from 'samble';
+import { ConfigService } from '@samble/core';
 
 /**
  * What the session carries.
@@ -528,7 +528,7 @@ export default function buildSession() {
 }
 `;
 
-  const authFile = `import { defineAuth, Logger } from 'samble';
+  const authFile = `import { defineAuth, Logger } from '@samble/core';
 
 /**
  * Whoever is making the request, as THIS application defines it.

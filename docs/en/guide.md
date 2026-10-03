@@ -50,7 +50,7 @@ npm install samble
 ## Command line
 
 ```bash
-npx samble@alpha init my-app     # only the first command needs the tag:
+npx @samble/core@alpha init my-app     # only the first command needs the tag:
                                 # until 1.0.0 every release is published
                                 # under `alpha`, not `latest`.
 npx samble module billing
@@ -112,7 +112,7 @@ it — there is no list to keep in sync.
 Every endpoint is **its own class** that extends `Endpoint` and implements `main()`. Routing metadata comes from decorators; the class is discovered by the `routes` glob of the module it belongs to (see [Modules](#modules)).
 
 ```typescript
-import { Endpoint, Group, HttpGet, Params, NotFoundError } from 'samble';
+import { Endpoint, Group, HttpGet, Params, NotFoundError } from '@samble/core';
 import { IsUUID } from 'class-validator';
 
 class UserParams {
@@ -249,7 +249,7 @@ installation ends up in a state nobody can explain.
 
 ```typescript
 // modules/billing/module.ts
-import { defineModule, token } from 'samble';
+import { defineModule, token } from '@samble/core';
 
 export interface BillingService {
   issueCharge(input: IssueChargeInput): Promise<Charge>;
@@ -943,7 +943,7 @@ Notes:
 `Samble.create()` is the only way to build an application, and **modules are the only way to mount anything**. There is no glob-mounting API: a route or a routine belongs to a module or it does not exist.
 
 ```typescript
-import { Samble } from 'samble';
+import { Samble } from '@samble/core';
 import identity from './modules/identity/module';
 import billing from './modules/billing/module';
 
@@ -1088,7 +1088,7 @@ import {
   ApiSummary,
   ApiDescription,
   ApiResponse,
-} from 'samble';
+} from '@samble/core';
 import { IsEmail, IsString, MinLength } from 'class-validator';
 
 class CreateUserDto {
@@ -1226,7 +1226,7 @@ printing it.
 page, a document or a file, return one of the **outputs** instead:
 
 ```typescript
-import { csv, file, pdf, view } from 'samble';
+import { csv, file, pdf, view } from '@samble/core';
 
 @Group('clients')
 @HttpGet()
@@ -1281,7 +1281,7 @@ many are deployed): nobody calls
 a routine, the schedule does.
 
 ```typescript
-import { Cron, Routine } from 'samble';
+import { Cron, Routine } from '@samble/core';
 
 @Cron('0 * * * *', { timezone: 'America/Lima' })  // every hour
 export class HourlyReport extends Routine {
@@ -1321,7 +1321,7 @@ Two things worth knowing:
 An installed **module** names what it needs in its manifest (`env: ['WA_BRIDGE_URL']`). It is checked at boot, **before the database is opened**, and the error gathers every module's missing variables into one list. It goes in the manifest rather than in the module's code so the question "what does this module need from me?" can be answered *without running anything* — which is what [`samble doctor`](./cli.md#samble-doctor) does. Declare only what is REQUIRED: a variable with a default in code is read with `optional()`.
 
 ```typescript
-import { ConfigService } from 'samble';
+import { ConfigService } from '@samble/core';
 
 ConfigService.get('DB_HOST');
 ConfigService.mode(); // 'development' | 'production' from NODE_ENV

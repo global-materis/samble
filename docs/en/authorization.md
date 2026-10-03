@@ -74,7 +74,7 @@ export default defineModule({
 Then name the module once, in the application's `src/config/permissions.ts`:
 
 ```typescript
-import type { PermissionsOf } from 'samble';
+import type { PermissionsOf } from '@samble/core';
 
 declare global {
   namespace SambleAuth {
@@ -170,7 +170,7 @@ export const PERMISSIONS_BY_ROLE: Record<UserRole, string[]> = {
 
 ```typescript
 // src/config/session-auth.ts
-import { defineAuth } from 'samble';
+import { defineAuth } from '@samble/core';
 
 const sessionAuth = defineAuth(async (request, { db }) => {
   const userId = request.session?.userId;

@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import type { Migration, Transaction } from 'samble';
+import type { Migration, Transaction } from '@samble/core';
 import { hashPassword } from '../services/password';
 
 /**

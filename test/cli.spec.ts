@@ -102,7 +102,7 @@ describe('ediciones sobre archivos que el generador no escribió', () => {
 
   it('agrega al arreglo y trae su import', () => {
     const source =
-      "import { defineModule } from 'samble';\n\nexport default defineModule({\n  tables: [],\n});\n";
+      "import { defineModule } from '@samble/core';\n\nexport default defineModule({\n  tables: [],\n});\n";
     const after = applyEdit(source, {
       path: 'x',
       arrayEntry: {
@@ -167,10 +167,10 @@ describe('ediciones sobre archivos que el generador no escribió', () => {
     const bloque = createModule({
       name: 'tasks',
       modulesDir: 'src/modules',
-      from: 'samble',
+      from: '@samble/core',
     }).edits.find((edit) => edit.path === 'src/config/permissions.ts')!;
 
-    const base = `import type { PermissionsOf } from 'samble';
+    const base = `import type { PermissionsOf } from '@samble/core';
 `;
     const unaVez = applyEdit(base, bloque)!;
 
@@ -214,10 +214,10 @@ describe('lo generado entra en el ancho de prettier', () => {
     const corto = createProvider({
       target: 'reports/flag',
       modulesDir: 'src/modules',
-      from: 'samble',
+      from: '@samble/core',
     }).files[0].content;
 
-    expect(corto).toContain("import { Provides, Provider } from 'samble';");
+    expect(corto).toContain("import { Provides, Provider } from '@samble/core';");
     expect(corto).toContain("import { Flag } from '../tokens/flag.token';");
 
     // El import de una ranura trae DOS nombres y una ruta con el alias: es el
@@ -226,7 +226,7 @@ describe('lo generado entra en el ancho de prettier', () => {
       target: 'reports/low-stock',
       slot: 'product-badges',
       modulesDir: 'src/modules',
-      from: 'samble',
+      from: '@samble/core',
     }).files[0].content;
 
     expect(largo).toContain(
@@ -254,7 +254,7 @@ describe('el token generado entra en el ancho de prettier', () => {
       target,
       kind: 'slot',
       modulesDir: 'src/modules',
-      from: 'samble',
+      from: '@samble/core',
     }).files[0].content;
 
   it('lo deja en una línea cuando entra', () => {
@@ -456,7 +456,7 @@ describe('samble init', () => {
     const parsed = JSON.parse(pkg.content);
 
     expect(parsed.name).toBe('mi-app');
-    expect(parsed.dependencies.samble).toBe(sambleVersion);
+    expect(parsed.dependencies['@samble/core']).toBe(sambleVersion);
     // Son peer dependencies de samble: sin ellas no arranca nada.
     expect(Object.keys(parsed.dependencies)).toEqual(
       expect.arrayContaining(['drizzle-orm', 'express', 'class-validator']),
@@ -683,12 +683,12 @@ describe('un módulo generado y puesto a andar', () => {
 
     // El camino real: primero el proyecto, después los módulos.
     scaffold(createProject({ name: 'inventory-app', sambleVersion }));
-    scaffold(createModule({ name: 'Inventory', modulesDir, from: 'samble' }));
+    scaffold(createModule({ name: 'Inventory', modulesDir, from: '@samble/core' }));
     scaffold(
       createEndpoint({
         target: 'inventory/count-items',
         modulesDir,
-        from: 'samble',
+        from: '@samble/core',
         method: 'post',
         path: 'count',
         // `--permission`: la aserción se escribe VIVA. Es opt-in justamente
@@ -698,26 +698,26 @@ describe('un módulo generado y puesto a andar', () => {
       }),
     );
     scaffold(
-      createTable({ target: 'inventory/item', modulesDir, from: 'samble' }),
+      createTable({ target: 'inventory/item', modulesDir, from: '@samble/core' }),
     );
     scaffold(
       createEndpoint({
         target: 'inventory/ping',
         modulesDir,
-        from: 'samble',
+        from: '@samble/core',
         path: 'ping',
         // `--public`: sin aserción, para los pocos que de verdad lo son.
         permission: false,
       }),
     );
     scaffold(
-      createRoutine({ target: 'inventory/nightly', modulesDir, from: 'samble' }),
+      createRoutine({ target: 'inventory/nightly', modulesDir, from: '@samble/core' }),
     );
     scaffold(
       createMigration({
         target: 'inventory/create-items',
         modulesDir,
-        from: 'samble',
+        from: '@samble/core',
       }),
     );
     // Lo que hace un autor a continuación: escribir el SQL y sacar el freno.
@@ -730,11 +730,11 @@ describe('un módulo generado y puesto a andar', () => {
         target: 'inventory/stock',
         kind: 'contract',
         modulesDir,
-        from: 'samble',
+        from: '@samble/core',
       }),
     );
     scaffold(
-      createProvider({ target: 'inventory/stock', modulesDir, from: 'samble' }),
+      createProvider({ target: 'inventory/stock', modulesDir, from: '@samble/core' }),
     );
     scaffold(
       createToken({
@@ -742,7 +742,7 @@ describe('un módulo generado y puesto a andar', () => {
         kind: 'slot',
         reaction: true,
         modulesDir,
-        from: 'samble',
+        from: '@samble/core',
       }),
     );
     scaffold(
@@ -750,7 +750,7 @@ describe('un módulo generado y puesto a andar', () => {
         target: 'inventory/labels',
         kind: 'slot',
         modulesDir,
-        from: 'samble',
+        from: '@samble/core',
       }),
     );
 
@@ -1022,7 +1022,7 @@ describe('un módulo generado y puesto a andar', () => {
     const plan = createStrategy({
       target: 'reports/low-stock',
       modulesDir,
-      from: 'samble',
+      from: '@samble/core',
       slot: 'product-badges',
     });
     const archivo = plan.files[0];
@@ -1055,7 +1055,7 @@ describe('un módulo generado y puesto a andar', () => {
     const archivo = createProvider({
       target: 'reports/flag',
       modulesDir,
-      from: 'samble',
+      from: '@samble/core',
     }).files[0];
 
     expect(archivo.path).toBe(
@@ -1082,7 +1082,7 @@ describe('un módulo generado y puesto a andar', () => {
     expect(reaccion).toContain("'inventory.item-added',");
     expect(reaccion).toContain("'slot',");
     // Y el import trae `Reaction`, o el archivo generado no compila.
-    expect(reaccion).toContain("import { Reaction, token } from 'samble';");
+    expect(reaccion).toContain("import { Reaction, token } from '@samble/core';");
 
     const ranura = read(`${modulesDir}/inventory/tokens/labels.token.ts`);
     // El token nombra la colección, la interfaz nombra UNA contribución.

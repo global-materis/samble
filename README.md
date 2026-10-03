@@ -7,12 +7,12 @@
 
 <h1 align="center">Samble</h1>
 
-[![npm](https://img.shields.io/npm/v/samble/alpha?label=npm)](https://www.npmjs.com/package/samble)
-[![types](https://img.shields.io/npm/types/samble)](https://www.npmjs.com/package/samble)
-[![node](https://img.shields.io/node/v/samble/alpha)](https://www.npmjs.com/package/samble)
-[![downloads](https://img.shields.io/npm/dm/samble)](https://www.npmjs.com/package/samble)
-[![install size](https://packagephobia.com/badge?p=samble@alpha)](https://packagephobia.com/result?p=samble@alpha)
-[![Socket](https://socket.dev/api/badge/npm/package/samble)](https://socket.dev/npm/package/samble)
+[![npm](https://img.shields.io/npm/v/@samble/core/alpha?label=npm)](https://www.npmjs.com/package/@samble/core)
+[![types](https://img.shields.io/npm/types/@samble/core)](https://www.npmjs.com/package/@samble/core)
+[![node](https://img.shields.io/node/v/@samble/core/alpha)](https://www.npmjs.com/package/@samble/core)
+[![downloads](https://img.shields.io/npm/dm/@samble/core)](https://www.npmjs.com/package/@samble/core)
+[![install size](https://packagephobia.com/badge?p=@samble/core@alpha)](https://packagephobia.com/result?p=@samble/core@alpha)
+[![Socket](https://socket.dev/api/badge/npm/package/@samble/core)](https://socket.dev/npm/package/@samble/core)
 [![license](https://img.shields.io/github/license/global-materis/samble)](LICENSE)
 
 Backend framework for Node whose unit is the **installable module**: a folder
@@ -24,7 +24,7 @@ Express + Drizzle + class-validator underneath, decorators on top.
 ## Start
 
 ```bash
-npx samble@alpha init my-app    # package.json, tsconfig, .env, entry point
+npx @samble/core@alpha init my-app    # package.json, tsconfig, .env, entry point
 cd my-app
 npx samble module billing
 npm run dev
@@ -37,14 +37,14 @@ Inside the project it no longer matters: `npx` finds the local install first.
 Into a project you already have:
 
 ```bash
-npm i samble@alpha
+npm i @samble/core@alpha
 npm i drizzle-orm express class-validator reflect-metadata pg
 ```
 
 ## The application
 
 ```typescript
-import { ConfigService, Samble } from 'samble';
+import { ConfigService, Samble } from '@samble/core';
 import billing from './modules/billing/module';
 
 const app = await Samble.create({

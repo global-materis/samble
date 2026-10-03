@@ -15,7 +15,7 @@ const config: Config = {
    * probar el caso real.
    */
   moduleNameMapper: {
-    '^samble$': '<rootDir>/lib',
+    '^@samble/core$': '<rootDir>/lib',
     // El mismo alias que `samble init` escribe: la demo lo usa, así que jest
     // tiene que resolverlo igual que el build.
     '^@/(.*)$': '<rootDir>/src/modules/$1',

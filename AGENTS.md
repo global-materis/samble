@@ -70,7 +70,7 @@ is why every entry template separates `createApp()` from `main()` behind
 set nobody runs.
 
 `tsconfig.json` maps `samble` -> `lib` (`paths`) and `jest.config.ts` maps it at
-runtime (`moduleNameMapper`), so generated code can import `'samble'` like a
+runtime (`moduleNameMapper`), so generated code can import `'@samble/core'` like a
 consumer does and still be type-checked here. In `test/cli.spec.ts`, **do not
 call `jest.resetModules()` before requiring a generated manifest**: a fresh
 registry gives it a different `Endpoint` class, `instanceof` fails in the

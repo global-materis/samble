@@ -23,8 +23,8 @@
     // `samble` ES `lib/`, y `@/` son los módulos de la demo — el mismo alias que
     // escribe `samble init`, para que el ejemplo use lo que documentamos.
     "paths": {
-      "samble": ["./lib"],
-      "samble/*": ["./lib/*"],
+      "@samble/core": ["./lib"],
+      "@samble/core/*": ["./lib/*"],
       "@/*": ["./src/modules/*"]
     },
     "incremental": true,

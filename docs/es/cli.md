@@ -13,7 +13,7 @@ Los cuatro que SÍ llegan a la base (`migrate`, `migrate:status`,
 de entrada y le piden la aplicación, que ya sabe dónde viven sus datos.
 
 ```bash
-npx samble@alpha init my-app     # la única vez que necesitás @alpha
+npx @samble/core@alpha init my-app     # la única vez que necesitás @alpha
 cd my-app
 npx samble module billing
 npm run dev
@@ -122,11 +122,11 @@ se puede corregir.
 ## `samble init [name]`
 
 ```bash
-npx samble@alpha init my-app                 # dentro de ./my-app
-npx samble@alpha init                        # en la carpeta actual
-npx samble@alpha init my-app --skip-install  # escribe los archivos, el npm install lo corrés vos
-npx samble@alpha init my-app --dir src/bc    # los módulos viven en otro lado
-npx samble@alpha init my-app --no-git        # sin repositorio ni primer commit
+npx @samble/core@alpha init my-app                 # dentro de ./my-app
+npx @samble/core@alpha init                        # en la carpeta actual
+npx @samble/core@alpha init my-app --skip-install  # escribe los archivos, el npm install lo corrés vos
+npx @samble/core@alpha init my-app --dir src/bc    # los módulos viven en otro lado
+npx @samble/core@alpha init my-app --no-git        # sin repositorio ni primer commit
 ```
 
 | Bandera | Efecto |

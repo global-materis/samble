@@ -8,7 +8,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- First release. A backend framework for Node whose unit is the installable
+- First release, published as `@samble/core`; the binary is `samble`. A backend framework for Node whose unit is the installable
   module: each module declares its own routes, tables, migrations, permissions
   and contracts, and mounts into the application with `Samble.create({ modules })`.
 - Contracts, extension points and schedules between modules, resolved at boot.

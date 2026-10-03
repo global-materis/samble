@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import type { Migration, Transaction } from 'samble';
+import type { Migration, Transaction } from '@samble/core';
 
 export class CreateProducts1758000100000 implements Migration {
   public async up(db: Transaction): Promise<void> {

@@ -72,7 +72,7 @@ function requiredNode(): string | null {
     const candidate = path.join(dir, 'package.json');
     if (fs.existsSync(candidate)) {
       const pkg = JSON.parse(fs.readFileSync(candidate, 'utf8'));
-      if (pkg.name === 'samble') return pkg.engines?.node ?? null;
+      if (pkg.name === '@samble/core') return pkg.engines?.node ?? null;
     }
     dir = path.dirname(dir);
   }

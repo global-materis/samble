@@ -5,7 +5,7 @@
  * `publishConfig.tag` is declared in package.json and npm 11 IGNORES it: a
  * plain `npm publish` reports "with tag latest" even so (verified with
  * `--dry-run`). Publishing a 1.0.0-alpha.x as `latest` would make
- * `npm i samble` hand an API that still moves to whoever asks for the stable
+ * `npm i @samble/core` hand an API that still moves to whoever asks for the stable
  * line.
  *
  * So the check runs in `prepublishOnly`, where refusing still costs nothing.
@@ -24,7 +24,7 @@ if (prerelease && tag !== channel) {
       '',
       `  npm publish --tag ${channel}`,
       '',
-      `A prerelease published as "latest" is what \`npm i samble\` installs from`,
+      `A prerelease published as "latest" is what \`npm i @samble/core\` installs from`,
       '  then on, while its API still moves.',
       '',
     ].join('\n'),

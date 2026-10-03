@@ -13,7 +13,7 @@ and nothing else) get there the same way: they import your entry point and ask
 it for the application, which already knows where its data lives.
 
 ```bash
-npx samble@alpha init my-app     # the only time you need @alpha
+npx @samble/core@alpha init my-app     # the only time you need @alpha
 cd my-app
 npx samble module billing
 npm run dev
@@ -122,11 +122,11 @@ corrected.
 ## `samble init [name]`
 
 ```bash
-npx samble@alpha init my-app                 # into ./my-app
-npx samble@alpha init                        # into the current folder
-npx samble@alpha init my-app --skip-install  # write the files, run npm install yourself
-npx samble@alpha init my-app --dir src/bc    # modules live somewhere else
-npx samble@alpha init my-app --no-git        # no repository, no first commit
+npx @samble/core@alpha init my-app                 # into ./my-app
+npx @samble/core@alpha init                        # into the current folder
+npx @samble/core@alpha init my-app --skip-install  # write the files, run npm install yourself
+npx @samble/core@alpha init my-app --dir src/bc    # modules live somewhere else
+npx @samble/core@alpha init my-app --no-git        # no repository, no first commit
 ```
 
 | Flag | Effect |

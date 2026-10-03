@@ -459,7 +459,7 @@ describe('una migración sin escribir', () => {
     const [archivo] = createMigration({
       target: 'users/create-users',
       modulesDir: 'src/modules',
-      from: 'samble',
+      from: '@samble/core',
       now: 1789779741336,
     }).files;
 

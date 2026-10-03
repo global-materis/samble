@@ -144,7 +144,7 @@ export function generateMigration(options: GenerateMigrationOptions): Plan {
 
   const stamp = options.now ?? Date.now();
   const className = `${toPascal(target.name)}${stamp}`;
-  const from = options.from ?? 'samble';
+  const from = options.from ?? '@samble/core';
 
   const content = `import { sql } from 'drizzle-orm';
 import type { Migration, Transaction } from '${from}';

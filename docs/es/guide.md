@@ -63,7 +63,7 @@ de autenticación usa sesiones por cookie — el framework ya no depende de él.
 ## Línea de comandos
 
 ```bash
-npx samble@alpha init my-app     # sólo el primer comando necesita la etiqueta:
+npx @samble/core@alpha init my-app     # sólo el primer comando necesita la etiqueta:
                                 # hasta 1.0.0 cada versión se publica
                                 # bajo `alpha`, no `latest`.
 npx samble module billing
@@ -130,7 +130,7 @@ Cada endpoint es **su propia clase**, que extiende `Endpoint` e implementa
 glob `routes` del módulo al que pertenece (ver [Módulos](#módulos)).
 
 ```typescript
-import { Endpoint, Group, HttpGet, Params, NotFoundError } from 'samble';
+import { Endpoint, Group, HttpGet, Params, NotFoundError } from '@samble/core';
 import { IsUUID } from 'class-validator';
 
 class UserParams {
@@ -292,7 +292,7 @@ una instalación termina en un estado que nadie sabe explicar.
 
 ```typescript
 // modules/billing/module.ts
-import { defineModule, token } from 'samble';
+import { defineModule, token } from '@samble/core';
 
 export interface BillingService {
   issueCharge(input: IssueChargeInput): Promise<Charge>;
@@ -1007,7 +1007,7 @@ son la única forma de montar algo**. No hay una API para montar por globs: una
 ruta o una rutina pertenece a un módulo, o no existe.
 
 ```typescript
-import { Samble } from 'samble';
+import { Samble } from '@samble/core';
 import identity from './modules/identity/module';
 import billing from './modules/billing/module';
 
@@ -1196,7 +1196,7 @@ import {
   ApiSummary,
   ApiDescription,
   ApiResponse,
-} from 'samble';
+} from '@samble/core';
 import { IsEmail, IsString, MinLength } from 'class-validator';
 
 class CreateUserDto {
@@ -1335,7 +1335,7 @@ la consola, porque perder el mapa en silencio es peor que imprimirlo.
 una página, un documento o un archivo, devolvé una de las **salidas**:
 
 ```typescript
-import { csv, file, pdf, view } from 'samble';
+import { csv, file, pdf, view } from '@samble/core';
 
 @Group('clients')
 @HttpGet()
@@ -1391,7 +1391,7 @@ implementación entre las que haya): a una rutina no la llama nadie, la llama el
 reloj.
 
 ```typescript
-import { Cron, Routine } from 'samble';
+import { Cron, Routine } from '@samble/core';
 
 @Cron('0 * * * *', { timezone: 'America/Lima' }) // cada hora
 export class HourlyReport extends Routine {
