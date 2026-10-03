@@ -1,0 +1,9 @@
+{
+  // The three that make this repo's config apply in the editor. Without the
+  // first one, .editorconfig is a file VS Code ignores.
+  "recommendations": [
+    "editorconfig.editorconfig",
+    "esbenp.prettier-vscode",
+    "dbaeumer.vscode-eslint"
+  ]
+}

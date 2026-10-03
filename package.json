@@ -1,0 +1,119 @@
+{
+  "name": "samble",
+  "npmName": "samble",
+  "version": "1.0.0-alpha.1",
+  "description": "Backend framework whose unit is the installable module: routes, tables, migrations, permissions and contracts declared per module.",
+  "main": "./dist/lib/index.js",
+  "types": "./types/lib/index.d.ts",
+  "bin": {
+    "samble": "bin/samble.js"
+  },
+  "bugs": "https://github.com/global-materis/samble/issues",
+  "homepage": "https://github.com/global-materis/samble#readme",
+  "scripts": {
+    "dev": "nodemon --legacy-watch ./src/index.ts",
+    "build": "npm run clear && npx tsc -p ./tsconfig.build.json --declarationDir ./types",
+    "clear": "node -e \"for (const d of ['dist','types']) require('fs').rmSync(d, { recursive: true, force: true })\"",
+    "test": "cross-env NODE_OPTIONS=--experimental-vm-modules jest",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "prepublishOnly": "node ./scripts/publish-guard.js && npm run build",
+    "demo:bytecode": "node ./scripts/bytecode/run.js"
+  },
+  "files": [
+    "bin",
+    "dist",
+    "types",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "backend",
+    "api",
+    "orm",
+    "drizzle",
+    "express",
+    "modules"
+  ],
+  "author": "Erick <erick.qc159@outlook.com> (https://github.com/erickqc2)",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/global-materis/samble.git"
+  },
+  "publishConfig": {
+    "access": "public",
+    "tag": "alpha"
+  },
+  "peerDependencies": {
+    "class-validator": "^0.14.0",
+    "drizzle-kit": "^0.31.11",
+    "drizzle-orm": "^0.45.3",
+    "express": "^4.18.2",
+    "typescript": "^5.1.6 || ^6.0.0"
+  },
+  "dependencies": {
+    "@types/multer": "^1.4.8",
+    "class-transformer": "^0.5.1",
+    "class-validator-jsonschema": "^5.1.0",
+    "commander": "^12.1.0",
+    "cookie-parser": "^1.4.6",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "glob": "^10.3.3",
+    "log4js": "^6.9.1",
+    "morgan": "^1.10.0",
+    "node-cron": "^3.0.2",
+    "reflect-metadata": "^0.1.13",
+    "semver": "^7.8.5",
+    "slash": "^3.0.0",
+    "swagger-ui-express": "^5.0.0"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
+    "@eslint/js": "^10.0.1",
+    "@jest/globals": "^29.7.0",
+    "@types/connect-pg-simple": "^7.0.0",
+    "@types/cookie-parser": "^1.4.3",
+    "@types/cors": "^2.8.13",
+    "@types/express-session": "^1.17.7",
+    "@types/morgan": "^1.9.4",
+    "@types/node": "^24.19.0",
+    "@types/node-cron": "^3.0.8",
+    "@types/semver": "^7.8.0",
+    "@types/supertest": "^7.2.1",
+    "@types/swagger-ui-express": "^4.1.3",
+    "bytenode": "^1.6.0",
+    "class-validator": "^0.14.0",
+    "connect-pg-simple": "^9.0.0",
+    "cross-env": "^7.0.3",
+    "drizzle-kit": "0.31.11",
+    "drizzle-orm": "0.45.3",
+    "eslint": "^10.11.0",
+    "eslint-config-prettier": "^10.1.8",
+    "express": "^4.18.2",
+    "express-session": "^1.17.3",
+    "jest": "^29.7.0",
+    "nodemon": "^3.0.1",
+    "pg": "^8.11.2",
+    "prettier": "^3.9.9",
+    "pug": "^3.0.3",
+    "supertest": "^7.2.2",
+    "ts-jest": "^29.4.14",
+    "ts-node": "^10.9.1",
+    "tsconfig-paths": "^4.2.0",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.70.1"
+  },
+  "peerDependenciesMeta": {
+    "drizzle-kit": {
+      "optional": true
+    }
+  }
+}

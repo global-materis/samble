@@ -1,0 +1,12 @@
+doctype html
+html
+  head
+    title Catalog
+    link(rel="stylesheet" href="/public/index.css")
+  body
+    h1 Products
+    ul
+      each product in products
+        li
+          strong= product.name
+          |  — stock: #{product.stock}

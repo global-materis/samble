@@ -1,0 +1,29 @@
+# The one place the shape of a file is decided, for editors that are not this
+# one. Every editor worth using reads this file; Prettier reads it too, and
+# .prettierrc repeats the same values so neither can quietly disagree with the
+# other.
+#
+# https://editorconfig.org
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 2
+insert_final_newline = true
+trim_trailing_whitespace = true
+max_line_length = 80
+
+# Two trailing spaces are a line break in Markdown. Trimming them edits the
+# text.
+[*.md]
+trim_trailing_whitespace = false
+max_line_length = off
+
+[*.{json,jsonc,yml,yaml}]
+max_line_length = off
+
+# Tabs are part of the format.
+[Makefile]
+indent_style = tab

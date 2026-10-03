@@ -1,0 +1,16 @@
+{
+  "ignore": [
+    ".git",
+    "node_modules/**/node_modules",
+    "definitions/node_modules/**/node_modules"
+  ],
+  "verbose": false,
+  "execMap": {
+    "js": "node --harmony"
+  },
+  "watch": ["src/", "lib/"],
+  "env": {
+    "NODE_ENV": "development"
+  },
+  "ext": "ts"
+}

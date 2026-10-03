@@ -1,0 +1,19 @@
+# The working tree is LF, on every machine.
+#
+# Without this, git on Windows checks files out as CRLF (`core.autocrlf=true`)
+# while `.editorconfig` and `.prettierrc` both say LF — so the formatter wants
+# to rewrite every line of half the repo, and the other half, written by tools
+# that do not go through git, is already LF. That is the mixed tree this fixes.
+# `eol=lf` wins over whatever `core.autocrlf` is set to locally.
+* text=auto eol=lf
+
+# Never touched: a byte is a byte.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.jsc binary
+*.tgz binary
+*.pem binary

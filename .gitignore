@@ -1,0 +1,30 @@
+# compiled output
+/dist
+/.bytecode
+/test/.generated
+.tsbuildinfo
+/node_modules
+.env
+.env.development
+
+key.pem
+cert.pem
+
+*.pem
+*.cert
+*.crt
+*.key
+
+/logs
+*.log
+
+/cache
+
+/public
+
+samble.json
+/config
+/types
+
+# packed tarballs from `npm pack`
+*.tgz

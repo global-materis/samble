@@ -1,0 +1,53 @@
+{
+  "compilerOptions": {
+    "module": "commonjs",
+    "moduleResolution": "node10",
+    // TS 6 marca `node10` como deprecado y TS 7 lo quita. Migrar a `node16`
+    // rompe hoy los tipos de multer (`Express.Multer`), así que es su propia
+    // tarea y no un efecto secundario de subir de versión.
+    "ignoreDeprecations": "6.0",
+    "declaration": true,
+    "declarationDir": "./types",
+    "removeComments": false,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "allowSyntheticDefaultImports": true,
+    "target": "es2017",
+    "sourceMap": false,
+    "outDir": "./dist",
+    // TS 6 lo exige explícito en vez de inferirlo del conjunto de archivos: el
+    // programa incluye `lib`, `src` y `test`, así que la raíz común es el repo.
+    "rootDir": ".",
+    // Dentro de este repo, `samble` ES `lib/`: así el código que genera el CLI
+    // (que importa 'samble', como un consumidor) se TYPECHEQUEA en las pruebas.
+    // `samble` ES `lib/`, y `@/` son los módulos de la demo — el mismo alias que
+    // escribe `samble init`, para que el ejemplo use lo que documentamos.
+    "paths": {
+      "samble": ["./lib"],
+      "samble/*": ["./lib/*"],
+      "@/*": ["./src/modules/*"]
+    },
+    "incremental": true,
+    "skipLibCheck": true,
+    "strictNullChecks": false,
+    "noImplicitAny": false,
+    "strictBindCallApply": false,
+    "forceConsistentCasingInFileNames": false,
+    "noFallthroughCasesInSwitch": false,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "esModuleInterop": true
+  },
+  // ts-node lee esto, y sin ello `npm run dev` muere en el primer import de la
+  // demo: `paths` es cosa del compilador y Node no sabe nada de `@/`. Es la
+  // misma línea que `samble init` escribe en el tsconfig que genera.
+  "ts-node": { "require": ["tsconfig-paths/register"] },
+  "compileOnSave": true,
+  // `./test` is in here so the suite is TYPECHECKED, not only run: a broken
+  // regex in a spec used to surface as a jest failure at the end instead of a
+  // compiler error at once. It is also what lets ESLint read types there.
+  "include": ["./src", "./lib", "./test", "jest.config.ts"],
+  // Projects the CLI scaffolds during the tests: written by the generators,
+  // resolved against their own node_modules, and not ours to compile.
+  "exclude": ["node_modules", "dist", "types", "build", "test/.generated"]
+}

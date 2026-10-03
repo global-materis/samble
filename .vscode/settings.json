@@ -1,0 +1,25 @@
+{
+  // Indentation, line endings and the final newline come from .editorconfig,
+  // so they are NOT repeated here: every editor reads that file, and a second
+  // copy is a second thing to keep in sync.
+  //
+  // (VS Code needs the EditorConfig extension for that file to apply:
+  // editorconfig.editorconfig — see .vscode/extensions.json.)
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  // Prettier formats, ESLint fixes what is left. Both read the project's own
+  // config, so the editor and `npm run lint` cannot disagree.
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit"
+  },
+  "eslint.validate": ["typescript"],
+  "files.exclude": {
+    "**/.tsbuildinfo": true
+  },
+  "search.exclude": {
+    "dist": true,
+    "types": true,
+    "logs": true,
+    "test/.generated": true
+  }
+}

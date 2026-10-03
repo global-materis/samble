@@ -1,0 +1,113 @@
+### Samble 2.x demo — the whole flow, in order.
+### Run the server first: `npm run dev`.
+### Two seeded users, both with password `demo1234`:
+###   owner -> every permission (`*`)
+###   staff -> can view users, and view/manage products
+@host = http://localhost:16001
+
+### The same flow from a browser, if you prefer clicking it:
+###   http://localhost:16001/public/
+### It is served by this application's own `static()`, so it is same-origin and
+### the session cookie needs nothing argued about.
+
+### ---------------------------------------------------------------- 1. Anonymous
+### `me` answers the anonymous: it reads `this.auth.optional`, not `.actor`.
+GET {{host}}/api/auth/me
+
+### Reading products without signing in -> 401. The endpoint calls
+### `this.auth.assert('catalog.products.view')`, and nobody is signed in.
+GET {{host}}/api/products
+
+### ---------------------------------------------------------------- 2. Validation
+### A body that fails class-validator -> 422, with the offending field named.
+### Nothing in `main()` runs.
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "" }
+
+### ---------------------------------------------------------------- 3. Sign in as staff
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "staff", "password": "demo1234" }
+
+### Now `me` reports the actor and the permission keys it holds.
+GET {{host}}/api/auth/me
+
+### ---------------------------------------------------------------- 4. Permissions
+### staff may view and manage products. Note `badges` on each one: the seeded
+### products have stock to spare, so the extension point answers nothing for
+### them. Create the one below (stock 5) and a "Low stock" badge appears —
+### contributed by `reports`, without catalog changing or knowing.
+GET {{host}}/api/products
+
+### ...and only enabled ones, filtered by query string (a STRING: 'true').
+GET {{host}}/api/products?onlyEnabled=true
+
+### 201, because the endpoint sets `this.httpStatus`.
+POST {{host}}/api/products
+Content-Type: application/json
+
+{ "name": "Router 4G", "stock": 5 }
+
+### Two writes in one transaction: the product's stock and its movement.
+### It also announces `catalog.product.restocked`, and `reports` prints a line from
+### a module `catalog` knows nothing about — look at the server output.
+POST {{host}}/api/products/1/restock
+Content-Type: application/json
+
+{ "quantity": 10 }
+
+### An id that does not exist -> 404 thrown from `main()`, same error shape.
+GET {{host}}/api/products/9999
+
+### A non-numeric id -> 422 from the param DTO, before `main()` is reached.
+GET {{host}}/api/products/abc
+
+### staff CANNOT create users -> 403 (identity.users.manage).
+### Note the difference with step 1: there it was 401. Signed in but not
+### allowed is a different answer than not signed in at all.
+POST {{host}}/api/users
+Content-Type: application/json
+
+{ "username": "new", "fullName": "New One", "password": "demo1234", "role": "staff" }
+
+### ---------------------------------------------------------------- 5. Sign in as owner
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "owner", "password": "demo1234" }
+
+### Same request as above, now 201: owner holds `*`.
+POST {{host}}/api/users
+Content-Type: application/json
+
+{ "username": "new", "fullName": "New One", "password": "demo1234", "role": "staff" }
+
+GET {{host}}/api/users
+
+### ------------------------------------------------- 6. Answers that are not JSON
+### A page: `main()` returns `view('products', ...)`, rendered from
+### `catalog/views/products.pug`. Note the URL: it is NOT under /api, because
+### the class says `@Module('products', { basePath: '/' })` — a page belongs
+### where people link to it. `logs/router.log` shows where everything mounted.
+GET {{host}}/products/page
+
+### The same catalog as a spreadsheet: `main()` returns `csv(products, ...)`.
+### Note the response headers — text/csv and a Content-Disposition with the
+### accented filename sent twice, sanitized and as UTF-8.
+GET {{host}}/api/products/export
+
+### ---------------------------------------------------------------- 7. A module shaped like an extension
+### `reports` owns no table. It reads identity AND catalog through their
+### contracts, without importing either, and answers under its own id because
+### it declares no @Group.
+GET {{host}}/api/reports/summary
+
+### ---------------------------------------------------------------- 8. Docs
+### OpenAPI generated from the same decorators used for routing.
+GET {{host}}/docs.json
+
+### ---------------------------------------------------------------- 9. Sign out
+POST {{host}}/api/auth/logout

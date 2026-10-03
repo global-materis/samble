@@ -1,0 +1,18 @@
+# Build output and anything generated: formatting it is noise, and half of it
+# is not ours to format.
+dist
+types
+build
+coverage
+logs
+node_modules
+
+# Projects the CLI scaffolds during the tests. They are written by the
+# generators, and the generators are what the assertions read.
+test/.generated
+
+# Markdown here is hand-set prose and tables. Prettier reflows both and the
+# diff is all noise.
+*.md
+
+package-lock.json

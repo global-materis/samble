@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Samble Demo</title>
+    <link rel="stylesheet" href="/public/index.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Samble demo</h1>
+      <p class="lead">
+        A browser talking to the same API as <code>demo.http</code>. Served from
+        this application's own <code>static()</code>, so every call below is
+        same-origin and the session cookie travels on its own.
+      </p>
+
+      <div id="session" class="session">
+        <span class="tag">checking…</span>
+      </div>
+    </header>
+
+    <main>
+      <!-- Anonymous ------------------------------------------------------- -->
+      <section id="signed-out" hidden>
+        <h2>Sign in</h2>
+        <p class="hint">
+          Both seeded users have the password <code>demo1234</code>. Sign in as
+          <strong>staff</strong> to see a permission gate answer 403 — an owner
+          holds <code>*</code> and can never prove one works.
+        </p>
+
+        <form id="login-form" class="row">
+          <label>
+            User
+            <select name="username">
+              <option value="owner">owner</option>
+              <option value="staff">staff</option>
+            </select>
+          </label>
+          <label>
+            Password
+            <input name="password" type="password" value="demo1234" />
+          </label>
+          <button type="submit">Sign in</button>
+        </form>
+
+        <output id="login-error" class="error" hidden></output>
+      </section>
+
+      <!-- Signed in ------------------------------------------------------- -->
+      <div id="signed-in" hidden>
+        <!-- Users: what this whole page exists to show ---------------------->
+        <section>
+          <h2>Users</h2>
+          <p class="hint">
+            <code>GET /api/users</code>. The response below is untouched —
+            <strong>there is no <code>password</code> field</strong>, and not
+            because this page removed it. The module decides what a user looks
+            like from outside, in
+            <code>identity/domain/user.projection.ts</code>.
+          </p>
+
+          <table id="users-table" hidden>
+            <thead>
+              <tr>
+                <th>id</th>
+                <th>username</th>
+                <th>full name</th>
+                <th>role</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+
+          <details>
+            <summary>Raw response</summary>
+            <pre id="users-raw"></pre>
+          </details>
+
+          <output id="users-error" class="error" hidden></output>
+        </section>
+
+        <!-- Creating one: the gate ----------------------------------------->
+        <section>
+          <h2>Create a user</h2>
+          <p class="hint">
+            <code>POST /api/users</code> needs
+            <code>identity.users.manage</code>, which <strong>staff</strong>
+            does not hold. As staff this answers 403; the body is the same shape
+            as every other failure.
+          </p>
+
+          <form id="create-user-form" class="row">
+            <label>
+              Username
+              <input name="username" value="tech" />
+            </label>
+            <label>
+              Full name
+              <input name="fullName" value="Demo Tech" />
+            </label>
+            <label>
+              Password
+              <input name="password" type="password" value="demo1234" />
+            </label>
+            <label>
+              Role
+              <select name="role">
+                <option value="staff">staff</option>
+                <option value="owner">owner</option>
+              </select>
+            </label>
+            <button type="submit">Create</button>
+          </form>
+
+          <output id="create-user-result" class="result" hidden></output>
+        </section>
+
+        <!-- Products: a write inside a transaction ------------------------->
+        <section>
+          <h2>Products</h2>
+          <p class="hint">
+            <code>GET /api/products</code>, and restocking is
+            <code>POST /api/products/:id/restock</code> — two writes in one
+            transaction, which is why the stock and its movement can never
+            disagree.
+          </p>
+
+          <table id="products-table" hidden>
+            <thead>
+              <tr>
+                <th>id</th>
+                <th>name</th>
+                <th>stock</th>
+                <th>restock</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+
+          <output id="products-error" class="error" hidden></output>
+
+          <p class="hint">
+            The same catalog as a spreadsheet:
+            <a href="/api/products/export">/api/products/export</a>, and as a
+            server-rendered page: <a href="/products/page">/products/page</a>.
+            Both come out of <code>main()</code>, not out of a decorator.
+          </p>
+        </section>
+      </div>
+    </main>
+
+    <script src="/public/app.js"></script>
+  </body>
+</html>
