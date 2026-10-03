@@ -115,7 +115,7 @@ SAMBLE_TEST_MYSQL_URL=mysql://root@localhost:3306
   },
   sqlite: {
     label: 'SQLite',
-    driver: { '@libsql/client': '^0.15.0' },
+    driver: { '@libsql/client': '^0.18.0' },
     testDeps: {},
     required: ['DB_URL'],
     options: `{
