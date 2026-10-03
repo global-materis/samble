@@ -1,4 +1,11 @@
-# Samble
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/global-materis/samble/main/assets/brand/samble-mark.svg">
+    <img alt="Samble" src="https://raw.githubusercontent.com/global-materis/samble/main/assets/brand/samble-mark-light.svg" width="112" height="112">
+  </picture>
+</p>
+
+<h1 align="center">Samble</h1>
 
 [![npm](https://img.shields.io/npm/v/samble/alpha?label=npm)](https://www.npmjs.com/package/samble)
 [![types](https://img.shields.io/npm/types/samble)](https://www.npmjs.com/package/samble)
@@ -186,5 +193,6 @@ logging, graceful shutdown.
 - [`src/`](https://github.com/global-materis/samble/tree/main/src) — a small, complete application (three modules), covered by `test/demo-app.spec.ts`
 - [`http/demo.http`](https://github.com/global-materis/samble/blob/main/http/demo.http) — the whole flow, request by request
 - [CHANGELOG](https://github.com/global-materis/samble/blob/main/CHANGELOG.md)
+- [`assets/brand/`](https://github.com/global-materis/samble/tree/main/assets/brand) — the mark: on dark, on light, one ink (`currentColor`) and a small-size cut for 16–32 px. Brand color: malachite `#22A07C`.
 
 Node >= 20. MIT.
