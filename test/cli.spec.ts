@@ -350,8 +350,15 @@ describe('samble init', () => {
       expect(busca('src/index.ts')).toContain(
         "import databaseFromEnv from './config/database';",
       );
-      // …y en el compilador, que tipa `this.db` según el motor.
+      // …y en el compilador, que tipa `this.db` según el motor: LEÍDO de esas
+      // opciones, no repetido, y con `satisfies` para que siga siendo UN motor.
       expect(busca('src/config/database.ts')).toContain(
+        "dialect: ReturnType<typeof databaseFromEnv>['dialect'];",
+      );
+      expect(busca('src/config/database.ts')).toContain(
+        '} satisfies DatabaseOptions;',
+      );
+      expect(busca('src/config/database.ts')).not.toContain(
         `dialect: '${dialect}';`,
       );
     }
@@ -436,7 +443,7 @@ describe('samble init', () => {
     expect(entry).toContain("ConfigService.require(['SESSION_SECRET']);");
     expect(entry).not.toContain('options.db');
     expect(busca('src/config/database.ts')).toContain(
-      'export default function databaseFromEnv(): DatabaseOptions',
+      'export default function databaseFromEnv() {',
     );
     expect(spec).toContain('closeTestDatabase(db)');
   });

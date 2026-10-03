@@ -44,8 +44,8 @@ is **not** an application. Dual layout:
   Spanish page across in the same commit. Code, identifiers and the framework's
   own JSDoc stay English on both sides; only the prose is translated.
 
-- **`docs/*/api.md` lists what an APPLICATION writes** — 101 of the 161 exports.
-  The other 60 are the module registry, the migrator, the loaders and the
+- **`docs/*/api.md` lists what an APPLICATION writes** — 101 of the 163 exports.
+  The other 62 are the module registry, the migrator, the loaders and the
   decorators' metadata: public because the CLI is a separate process, and left
   out on purpose so the page is a working reference and not a dump. It is also
   the one doc that can go stale silently, since adding a name to `lib/index.ts`
@@ -455,7 +455,14 @@ Rules that are easy to break, so do not:
 - **`this.db` is typed by a global declaration**, `SambleDatabase.Config`, for
   the same reason `SambleAuth` is global: an exported interface cannot be merged
   from outside. `Transaction = DatabaseOf[SelectedDialect]`; empty means
-  Postgres. Inside this repo it is Postgres, so code here that touches a MySQL
+  Postgres. The scaffold DERIVES it (`ReturnType<typeof
+  databaseFromEnv>['dialect']`) so the compiler and the driver cannot be told
+  two engines. `DialectOf` turns anything but exactly one engine into `never`
+  — a `: DatabaseOptions` annotation widens it to the union, which used to fall
+  through to Postgres in silence — and `Database`/`Transaction` then become
+  `DialectMustBeOneEngine`. They are conditional at the TOP on purpose: an
+  intersection prints as `Database` in an error; the bare interface prints
+  its name, which is the message. `test/dialect-types.spec.ts` pins it. Inside this repo it is Postgres, so code here that touches a MySQL
   or SQLite connection goes through the dialect, never through `db.execute`.
 - **`define-module` collects schema objects of EVERY engine** — it runs before
   anyone knows the engine — and `Samble.create()` refuses a mismatch by module

@@ -829,16 +829,18 @@ describe('the application', () => {
   const databaseTypes = `import { ConfigService, type DatabaseOptions } from '@samble/core';
 
 /**
- * Which database engine this application runs on, told to the compiler once.
+ * Which database engine this application runs on, told to the compiler.
  *
  * Drizzle's database type depends on the engine, so \`this.db\` is typed from
- * this — in every endpoint, routine and migration. Change the engine and change
- * it here, in \`dialect\` below and in package.json.
+ * this — in every endpoint, routine and migration. It is READ off the
+ * \`dialect\` that databaseFromEnv() returns, below, so the compiler and the
+ * driver cannot be told two different engines. To change the engine, change
+ * that \`dialect\` and the one in package.json.
  */
 declare global {
   namespace SambleDatabase {
     interface Config {
-      dialect: '${dialect}';
+      dialect: ReturnType<typeof databaseFromEnv>['dialect'];
     }
   }
 }
@@ -849,11 +851,15 @@ declare global {
  * Its variables are required HERE, where they are read, and not in
  * createApp(): a test hands createApp() a database of its own, never gets
  * here, and so needs none of them.
+ *
+ * \`satisfies DatabaseOptions\` and not a \`: DatabaseOptions\` return type: the
+ * annotation would widen \`dialect\` to every engine, and \`this.db\` would turn
+ * into DialectMustBeOneEngine everywhere.
  */
-export default function databaseFromEnv(): DatabaseOptions {
+export default function databaseFromEnv() {
 ${requiredCall(engine.required)}
 
-  return ${engine.options};
+  return ${engine.options} satisfies DatabaseOptions;
 }
 `;
 

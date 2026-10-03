@@ -13,6 +13,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `src/config/database.ts` beside the engine declaration, requires the `DB_*`
   variables where it reads them; `createApp()` only requires its own. A test
   calls `createApp(await openTestDatabase())`.
+- The scaffold's `SambleDatabase.Config` reads the engine off what
+  `databaseFromEnv()` returns (`ReturnType<typeof databaseFromEnv>['dialect']`)
+  instead of repeating it, so the compiler and the driver cannot be told two
+  different engines.
+
+### Fixed
+
+- A `SambleDatabase.Config` whose `dialect` was not exactly one engine (a
+  union, or `undefined` from a `: DatabaseOptions` annotation) fell through to
+  Postgres in silence. `this.db` is now `DialectMustBeOneEngine`, which names
+  the mistake wherever the database is used. `DialectOf` and
+  `DialectMustBeOneEngine` are exported.
 
 ## [1.0.0-alpha.2] - 2026-10-02
 

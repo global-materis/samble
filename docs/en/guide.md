@@ -813,20 +813,21 @@ and loads only the driver of the one in use.
 
 `samble init` asks which one, or takes `--db <engine>`, and writes the rest:
 the driver, the `.env`, the test database, the table template and the session
-store suggestion. It records the choice in three places, each read by somebody
+store suggestion. It records the choice in two places, each read by somebody
 else:
 
 ```typescript
-// src/index.ts — what opens the connection
-Samble.create({ db: { dialect: 'mysql', host, user, password, database }, ... });
-
-// src/config/database.ts — what types `this.db`
+// src/config/database.ts — what opens the connection, and what types `this.db`
 declare global {
   namespace SambleDatabase {
     interface Config {
-      dialect: 'mysql';
+      dialect: ReturnType<typeof databaseFromEnv>['dialect'];
     }
   }
+}
+
+export default function databaseFromEnv() {
+  return { dialect: 'mysql', host, user, password, database } satisfies DatabaseOptions;
 }
 ```
 
@@ -837,7 +838,17 @@ declare global {
 
 The declaration is what makes `this.db` the engine's own Drizzle type: on MySQL
 `.returning()` does not compile, because MySQL has no `RETURNING`. With no
-declaration the type is Postgres. A connection handed in (`db: someDrizzle`) is
+declaration the type is Postgres. It READS the engine off the options instead of
+repeating it, so the compiler and the driver cannot be told two different ones.
+That needs the options to say ONE engine: end them with `satisfies
+DatabaseOptions`. Annotating the function `: DatabaseOptions` widens `dialect`
+to all three, and then `this.db` is `DialectMustBeOneEngine` — the error says
+so wherever the database is used, instead of compiling against the wrong one.
+
+`package.json` is the second place because the generators do not load the
+application (making a table must not need a `.env`). Out of step, it is caught
+at boot: a module whose tables were written for another engine is refused by
+name. A connection handed in (`db: someDrizzle`) is
 recognized by itself: samble reads the dialect off it.
 
 **A module's tables are written for the engine the application runs on.** A

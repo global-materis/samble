@@ -865,20 +865,21 @@ sólo el driver del que se usa.
 
 `samble init` pregunta cuál, o lo recibe con `--db <motor>`, y escribe el resto:
 el driver, el `.env`, la base de pruebas, la plantilla de tablas y la sugerencia
-de store de sesiones. Anota la elección en tres lugares, y cada uno lo lee
+de store de sesiones. Anota la elección en dos lugares, y cada uno lo lee
 alguien distinto:
 
 ```typescript
-// src/index.ts — lo que abre la conexión
-Samble.create({ db: { dialect: 'mysql', host, user, password, database }, ... });
-
-// src/config/database.ts — lo que tipa `this.db`
+// src/config/database.ts — lo que abre la conexión, y lo que tipa `this.db`
 declare global {
   namespace SambleDatabase {
     interface Config {
-      dialect: 'mysql';
+      dialect: ReturnType<typeof databaseFromEnv>['dialect'];
     }
   }
+}
+
+export default function databaseFromEnv() {
+  return { dialect: 'mysql', host, user, password, database } satisfies DatabaseOptions;
 }
 ```
 
@@ -889,7 +890,17 @@ declare global {
 
 La declaración es lo que hace que `this.db` sea el tipo de Drizzle del motor: en
 MySQL `.returning()` no compila, porque MySQL no tiene `RETURNING`. Sin
-declaración el tipo es el de Postgres. Una conexión pasada desde afuera
+declaración el tipo es el de Postgres. El motor se LEE de las opciones en vez de
+repetirse, así que el compilador y el driver no pueden recibir dos distintos.
+Para eso las opciones tienen que decir UN motor: terminan en `satisfies
+DatabaseOptions`. Anotar la función `: DatabaseOptions` ensancha `dialect` a los
+tres, y entonces `this.db` es `DialectMustBeOneEngine`: el error lo dice donde se
+use la base, en vez de compilar contra el motor equivocado.
+
+`package.json` es el segundo lugar porque los generadores no cargan la
+aplicación (crear una tabla no debe exigir un `.env`). Si queda desfasado, se
+detecta al arrancar: un módulo con tablas escritas para otro motor se rechaza
+por nombre. Una conexión pasada desde afuera
 (`db: unDrizzle`) se reconoce sola: samble le lee el dialecto.
 
 **Las tablas de un módulo se escriben para el motor en que corre la

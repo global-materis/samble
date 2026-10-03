@@ -22,17 +22,28 @@ declare global {
    * Drizzle's database type depends on the engine — `pg`, `mysql2` and
    * `libsql` hand back different classes with different methods — so
    * `this.db` can only be typed after the application says which one it runs.
-   * `samble init` writes the declaration in `src/config/database.ts`:
+   * `samble init` writes the declaration in `src/config/database.ts`, reading
+   * the engine off the options the application connects with, so the compiler
+   * and the driver cannot be told two different engines:
    *
    * ```typescript
    * declare global {
    *   namespace SambleDatabase {
    *     interface Config {
-   *       dialect: 'mysql';
+   *       dialect: ReturnType<typeof databaseFromEnv>['dialect'];
    *     }
    *   }
    * }
+   *
+   * export default function databaseFromEnv() {
+   *   return { dialect: 'mysql', ... } satisfies DatabaseOptions;
+   * }
    * ```
+   *
+   * It has to be ONE engine. `satisfies` keeps `'mysql'` as written; annotating
+   * the function `: DatabaseOptions` instead widens it to every engine, and
+   * then `this.db` is {@link DialectMustBeOneEngine}, so the mistake is named
+   * where it shows up.
    *
    * A global namespace for the same reason as `SambleAuth`: an interface
    * re-exported from the package entry cannot be merged from outside. Left
@@ -44,12 +55,45 @@ declare global {
   }
 }
 
-/** The dialect this application declared, `postgres` when it declared none. */
-export type SelectedDialect = SambleDatabase.Config extends {
-  dialect: infer D extends DialectName;
-}
-  ? D
+/** `true` when T is a union of more than one member. */
+type IsUnion<T, U = T> = T extends unknown
+  ? [U] extends [T]
+    ? false
+    : true
+  : never;
+
+/**
+ * The dialect a `SambleDatabase.Config` declares: `postgres` when it declares
+ * none, and `never` when what it declares is not exactly one engine.
+ *
+ * The `never` is deliberate. A declaration widened to `DialectName` (or to
+ * `DialectName | undefined`, which is what `ReturnType<...>['dialect']` gives
+ * for a function annotated `: DatabaseOptions`) used to fall through to
+ * `postgres` in silence — compiling against one engine while connecting to
+ * another, the one mistake this declaration exists to prevent.
+ */
+export type DialectOf<C> = C extends { dialect: infer D }
+  ? true extends IsUnion<D>
+    ? never
+    : [D] extends [DialectName]
+      ? D
+      : never
   : 'postgres';
+
+/** The dialect this application declared, `postgres` when it declared none. */
+export type SelectedDialect = DialectOf<SambleDatabase.Config>;
+
+/**
+ * What `this.db` is when the declared dialect is not exactly one engine.
+ *
+ * A type and not a compile error, because a declaration cannot raise one: the
+ * error appears where the database is used, and its NAME is the message —
+ * "Property 'select' does not exist on type 'DialectMustBeOneEngine'". Hover
+ * it for the fix.
+ */
+export interface DialectMustBeOneEngine {
+  'SambleDatabase.Config declares more than one engine. In src/config/database.ts, end the returned options with `satisfies DatabaseOptions` instead of annotating the function `: DatabaseOptions`, which widens the dialect to every engine.': never;
+}
 
 /* The type arguments are the driver's result kind and the SCHEMA, and samble is
    agnostic about all of them on purpose. Naming the schema would mean a
@@ -75,7 +119,9 @@ export interface DatabaseOf {
  *
  * Typed by the dialect the application declared (see `SambleDatabase.Config`).
  */
-export type Transaction = DatabaseOf[SelectedDialect];
+export type Transaction = [SelectedDialect] extends [never]
+  ? DialectMustBeOneEngine
+  : DatabaseOf[SelectedDialect];
 
 /**
  * The database, as everything in samble sees it.
@@ -97,10 +143,15 @@ export type Transaction = DatabaseOf[SelectedDialect];
  * and then it sees exactly its own tables, which is the right scope anyway.
  * `db.select().from(table)` needs none of that and is fully typed as it is.
  */
-export type Database = Transaction & {
-  /** The driver's own client: a `pg` Pool, a `mysql2` pool, a libsql client. */
-  readonly $client: unknown;
-};
+// Conditional at the top, not `Transaction & {...}`: an intersection prints
+// as `Database` in an error, and a declaration that is not one engine has to
+// print as the name that explains it.
+export type Database = [SelectedDialect] extends [never]
+  ? DialectMustBeOneEngine
+  : DatabaseOf[SelectedDialect] & {
+      /** The driver's own client: a `pg` Pool, a `mysql2` pool, a libsql client. */
+      readonly $client: unknown;
+    };
 
 /**
  * How to reach the database, when samble is the one connecting.

@@ -74,6 +74,8 @@ export type {
   DatabaseOptions,
   DialectName,
   SelectedDialect,
+  DialectOf,
+  DialectMustBeOneEngine,
   Transaction,
 } from './modules/database';
 export { rows, run, tableExists } from './modules/database';
